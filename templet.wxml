@@ -1,0 +1,49 @@
+<view class="container">
+  <view class="userinfo">
+    <!-- 状态1: 未登录状态，显示登录按钮 -->
+    <block wx:if="{{!hasUserInfo}}">
+      <view class="login-section">
+        <image class="userinfo-avatar" src="{{userInfo.avatarUrl}}" mode="aspectFill"></image>
+        <text class="userinfo-nickname">{{userInfo.nickName}}</text>
+        <button class="login-btn" type="primary" bindtap="handleLoginTap" loading="{{isLoading}}">
+          {{isLoading ? '登录中...' : '一键登录/启动'}}
+        </button>
+        <text class="login-tip">登录后即可开始收集你的杯子精灵</text>
+      </view>
+
+      <!-- 登录成功后，才会显示完善信息的区域 -->
+      <view class="profile-section" wx:if="{{!hasUserInfo}}">
+        <text class="section-title">完善资料（可选）</text>
+        <view class="profile-form">
+          <view class="form-item">
+            <text class="item-label">头像</text>
+            <button class="avatar-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">
+              选择头像
+            </button>
+            <image class="avatar-preview" src="{{userInfo.avatarUrl}}" mode="aspectFill" wx:if="{{userInfo.avatarUrl !== defaultAvatarUrl}}"></image>
+          </view>
+          <view class="form-item">
+            <text class="item-label">昵称</text>
+            <input class="nickname-input" type="nickname" placeholder="请输入昵称" value="{{userInfo.nickName}}" bindinput="onInputChange" />
+          </view>
+          <text class="form-tip">设置专属昵称和头像，让精灵更好地认识你。</text>
+        </view>
+      </view>
+    </block>
+
+    <!-- 状态2: 已登录且信息完善状态 -->
+    <block wx:else>
+      <view class="welcome-section">
+        <image class="userinfo-avatar" src="{{userInfo.avatarUrl}}" mode="aspectFill"></image>
+        <text class="welcome-text">欢迎回来，{{userInfo.nickName}}！</text>
+        <text class="sub-text">快去扫描你的杯子，解锁新精灵吧！</text>
+        <button class="start-btn" bindtap="goToScan">开始扫描</button>
+      </view>
+    </block>
+  </view>
+
+  <!-- 其他内容，如 motto 展示 -->
+  <view class="usermotto" wx:if="{{motto}}">
+    <text class="user-motto">{{motto}}</text>
+  </view>
+</view>

@@ -1,0 +1,22 @@
+<view class="profile-container" bindtap="">
+  <view class="user-info">
+    <!-- 可选择头像按钮覆盖 -->
+    <button class="avatar-wrapper" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">
+      <image class="avatar" src="{{user.avatarUrl || '../../images/avatar.png'}}"></image>
+    </button>
+
+    <!-- 昵称，可点击获取微信昵称或修改 -->
+    <text class="nickname" bindtap="onNicknameTap">{{user.nickname || '未登录'}}</text>
+  </view>
+
+  <view class="stats">
+    <view class="stat-item">
+      <text class="stat-num">{{summary.unlocked}}</text>
+      <text class="stat-label">已解锁</text>
+    </view>
+    <view class="stat-item">
+      <text class="stat-num">{{summary.total}}</text>
+      <text class="stat-label">总卡牌</text>
+    </view>
+  </view>
+</view>

@@ -1,0 +1,23 @@
+<!-- pages/ar/index.wxml -->
+<view class="page">
+  <!-- 顶部返回按钮 -->
+  <view class="nav-bar" bindtap="goBack">
+    <image class="icon-back" src="../../images/icons/close.png" mode="aspectFit"></image>
+  </view>
+
+  <!-- Camera 预览 -->
+  <camera device-position="back" flash="off" class="camera" bindscancode="onScan"></camera>
+
+  <!-- 扫描框 & 呼吸边缘动画 -->
+  <view class="scan-frame">
+    <view class="breath"></view>
+    <!-- 引导动画 -->
+    <image class="guide" src="../../images/ai_example2.png" mode="aspectFit"></image>
+  </view>
+
+  <!-- 底部进度 -->
+  <view class="progress">
+    <text>{{collected.length}} / {{total}} 已收集</text>
+    <progress percent="{{percent}}" active stroke-width="6" show-info="false" activeColor="#FF7A23"/>
+  </view>
+</view>

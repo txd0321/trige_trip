@@ -1,0 +1,15 @@
+<view class="container">
+  <view class="userinfo">
+    <!-- 正圆头像，按钮透明覆盖 -->
+    <view class="circle-wrapper">
+      <image class="avatar-img" src="{{userInfo.avatarUrl}}" mode="aspectFill" />
+      <button class="avatar-mask" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar"></button>
+    </view>
+
+    <input class="nickname-input" placeholder="请输入昵称" value="{{userInfo.nickName}}" bindtap="onNicknameTap" bindinput="onInputChange" />
+  </view>
+
+  <button class="complete-btn" type="primary" bindtap="onCompleteTap" disabled="{{!(avatarReady && nameReady)}}">
+    完成
+  </button>
+</view>

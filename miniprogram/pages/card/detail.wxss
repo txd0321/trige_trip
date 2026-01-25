@@ -1,0 +1,14 @@
+.page{
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:center;
+  background:#fff;
+}
+.tip{color:#888;font-size:28rpx;}
+.cover{width:300rpx;height:400rpx;margin-bottom:40rpx;border-radius:16rpx;box-shadow:0 4rpx 16rpx rgba(0,0,0,0.1);}
+.name{font-size:36rpx;font-weight:bold;margin-bottom:20rpx;}
+.desc{font-size:28rpx;color:#666;padding:0 40rpx;text-align:center;}
+.success{color:#07c160;font-size:32rpx;margin-top:20rpx;}
+.repeat{color:#999;font-size:32rpx;margin-top:20rpx;}

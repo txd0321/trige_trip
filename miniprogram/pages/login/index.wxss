@@ -1,0 +1,30 @@
+/* ---- Template Styles ---- */
+page {
+  background-color: #f8f8f8;
+  height: 100%;
+}
+.container {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40rpx;
+  box-sizing: border-box;
+}
+.userinfo {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: white;
+  border-radius: 24rpx;
+  padding: 60rpx 40rpx;
+  box-shadow: 0 4rpx 24rpx rgba(0, 0, 0, 0.05);
+  margin-bottom: 40rpx;
+  gap: 40rpx;
+}
+.circle-wrapper { width:160rpx;height:160rpx;position:relative;}
+.avatar-img{width:100%;height:100%;border-radius:50%;display:block;}
+.avatar-mask{position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;border:none;background:transparent;line-height:0;}
+.nickname-input{width:80%;height:88rpx;border:2rpx solid #e0e0e0;border-radius:12rpx;padding:0 24rpx;font-size:30rpx;}
+.complete-btn{width:80%;height:96rpx;line-height:96rpx;border-radius:48rpx;font-size:32rpx;background:linear-gradient(135deg,#28a745,#20c997);color:#fff;margin-top:80rpx;}

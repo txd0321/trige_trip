@@ -1,0 +1,15 @@
+<view class="page" wx:if="{{loading}}">
+  <text class="tip">加载中...</text>
+</view>
+
+<view class="page" wx:elif="{{error}}">
+  <text class="tip">{{error}}</text>
+</view>
+
+<view class="page" wx:else>
+  <image class="cover" src="{{card.cover}}" mode="aspectFit"></image>
+  <text class="name">{{card.name}}</text>
+  <text class="desc" wx:if="{{card.desc}}">{{card.desc}}</text>
+  <text class="repeat" wx:if="{{repeat}}">已解锁</text>
+  <text class="success" wx:else>解锁成功！</text>
+</view>
