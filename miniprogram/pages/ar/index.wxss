@@ -1,70 +1,8 @@
-/* pages/ar/index.wxss */
-.page {
-  position: relative;
-  width: 100vw;
-  height: 100vh;
-  background: linear-gradient(180deg, #1E1E1E 0%, #000000 100%);
-}
-.camera {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 0;
-}
-.nav-bar {
-  position: absolute;
-  top: 40rpx;
-  left: 30rpx;
-  z-index: 10;
-}
-.icon-back {
-  width: 48rpx;
-  height: 48rpx;
-}
-.scan-frame {
-  position: absolute;
-  top: 25%;
-  left: 50%;
-  width: 60%;
-  aspect-ratio: 1;
-  transform: translateX(-50%);
-  border-radius: 50%;
-  overflow: hidden;
-  z-index: 5;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-.breath {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  border: 4rpx solid #FF7A23;
-  border-radius: 50%;
-  animation: breath 2s infinite;
-}
-@keyframes breath {
-  0% {
-    opacity: 0.2;
-  }
-  50% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0.2;
-  }
-}
-.guide {
-  width: 80%;
-  opacity: 0.6;
-}
-.progress {
-  position: absolute;
-  bottom: 120rpx;
-  width: 100%;
-  text-align: center;
-  color: #fff;
-  z-index: 10;
-}
+.page{position:fixed;top:0;left:0;width:100vw;height:100vh;overflow:hidden;background:#000;}
+.camera{position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:0;background:#000;}
+.overlay{position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:1;pointer-events:none;background:transparent;}
+.scan-frame{position:fixed;top:50%;left:50%;width:100rpx;height:700rpx;transform:translate(-50%,-50%);border:4rpx solid rgba(255,255,255,.8);border-radius:8rpx;box-sizing:border-box;z-index:2;pointer-events:none;display:block;/*enable children placement*/}
+/* 五等分横线 */
+.h-divider{position:absolute;left:0;width:100%;height:2rpx;background:rgba(255,255,255,.8);} 
+.status-text{position:fixed;top:120rpx;left:0;width:100%;text-align:center;font-size:28rpx;color:#fff;z-index:3;pointer-events:none;}
+.progress{position:fixed;top:200rpx;left:0;width:100%;text-align:left;color:#fff;z-index:3;padding-left:24rpx;box-sizing:border-box;pointer-events:none;}

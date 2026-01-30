@@ -1,3 +1,4 @@
 {
-  "navigationBarTitleText": "AR 探索"
+  "navigationBarTitleText": "AR 探索",
+  "disableScroll": true
 }

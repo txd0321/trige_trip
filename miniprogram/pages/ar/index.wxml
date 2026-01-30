@@ -1,23 +1,28 @@
-<!-- pages/ar/index.wxml -->
 <view class="page">
-  <!-- 顶部返回按钮 -->
-  <view class="nav-bar" bindtap="goBack">
-    <image class="icon-back" src="../../images/icons/close.png" mode="aspectFit"></image>
-  </view>
+  <camera class="camera" device-position="back" flash="off" frame-size="small" />
 
-  <!-- Camera 预览 -->
-  <camera device-position="back" flash="off" class="camera" bindscancode="onScan"></camera>
+  <!-- 使用旧版 canvas（不使用 type=2d），与 createCanvasContext 配套，兼容性更好 -->
+  <canvas
+    canvas-id="overlay"
+    class="overlay"
+    style="width:100vw;height:100vh;"
+    width="{{canvasWidth}}"
+    height="{{canvasHeight}}"
+  />
 
-  <!-- 扫描框 & 呼吸边缘动画 -->
+  <view class="status-text">{{patternStr}}</view>
+
+  <!-- ROI 竖条框 + 分段线 -->
   <view class="scan-frame">
-    <view class="breath"></view>
-    <!-- 引导动画 -->
-    <image class="guide" src="../../images/ai_example2.png" mode="aspectFit"></image>
+    <view class="h-divider" style="top:20%;"></view>
+    <view class="h-divider" style="top:40%;"></view>
+    <view class="h-divider" style="top:60%;"></view>
+    <view class="h-divider" style="top:80%;"></view>
+    <view class="h-divider" style="top:calc(100% - 4rpx);"></view>
   </view>
 
-  <!-- 底部进度 -->
   <view class="progress">
-    <text>{{collected.length}} / {{total}} 已收集</text>
-    <progress percent="{{percent}}" active stroke-width="6" show-info="false" activeColor="#FF7A23"/>
+    <text>{{collected.length}} / 13 已收集</text>
+    <progress percent="{{percent}}" active stroke-width="6" activeColor="#FF7A23" />
   </view>
 </view>
