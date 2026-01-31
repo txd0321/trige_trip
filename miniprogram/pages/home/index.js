@@ -1,48 +1,68 @@
 // pages/home/index.js
 Page({
   data: {
-    cards: [],
-    page: 1,
-    total: 0,
-    loading: false,
+    basePath: 'https://miniapp-assets-cupi-1327655007.cos.ap-guangzhou.myqcloud.com/animations/',
+    placeholderSrc: 'https://miniapp-assets-cupi-1327655007.cos.ap-guangzhou.myqcloud.com/animations/catstop.png',
+    logoSrc: 'https://miniapp-assets-cupi-1327655007.cos.ap-guangzhou.myqcloud.com/ui/logo.png',
+
+    currentSrc: '',
+    isLoop: false,
+    showPlaceholder: true,
+
+    randomActions: ['catdance', 'catspeak', 'catyawn'],
+    idleTimer: null,
+    isPlayingAction: false,
+    musicOn: true,
   },
+
+  /* ------------------------- 生命周期 ------------------------- */
   onLoad() {
-    this.loadCards();
+    this.startIdleLoop();
   },
-  onPullDownRefresh() {
-    this.setData({ page: 1, cards: [] });
-    this.loadCards(() => wx.stopPullDownRefresh());
+  onUnload() {
+    clearTimeout(this.data.idleTimer);
   },
-  loadMoreCards() {
-    if (this.data.cards.length >= this.data.total || this.data.loading) return;
-    this.setData({ page: this.data.page + 1 }, this.loadCards);
+
+  startIdleLoop() {
+    const loop = () => {
+      this.playOnce(this.data.basePath + 'catlook.mp4');
+      this.data.idleTimer = setTimeout(loop, 10000);
+    };
+    this.data.idleTimer = setTimeout(loop, 1000);
   },
-  loadCards(cb) {
-    this.setData({ loading: true });
-    const db = wx.cloud.database();
-    db.collection('cards')
-      .skip((this.data.page - 1) * 20)
-      .limit(20)
-      .get()
-      .then((res) => {
-        this.setData({
-          cards: this.data.page === 1 ? res.data : this.data.cards.concat(res.data),
-          total: res.total || 0,
-          loading: false,
-        });
-        cb && cb();
-      })
-      .catch(() => {
-        wx.showToast({ title: '加载失败', icon: 'none' });
-        this.setData({ loading: false });
-        cb && cb();
-      });
+
+  playOnce(src) {
+    this.setData({ showPlaceholder: true, currentSrc: src, isLoop: false });
   },
-  openCard(e) {
-    const id = e.currentTarget.dataset.id;
-    wx.navigateTo({ url: `/pages/card/detail?cardId=${id}` });
+
+  handleTap() {
+    if (this.data.isPlayingAction) return;
+    clearTimeout(this.data.idleTimer);
+    const next = this.data.randomActions[Math.floor(Math.random() * this.data.randomActions.length)];
+    this.setData({ isPlayingAction: true });
+    this.playOnce(this.data.basePath + `${next}.mp4`);
   },
+
+  onVideoLoaded() {
+    const video = wx.createVideoContext('elfVideo', this);
+    video.seek(0);
+    video.play();
+  },
+  onVideoPlay() {
+    this.setData({ showPlaceholder: false });
+    if (this.data.isPlayingAction) {
+      setTimeout(() => {
+        this.setData({ showPlaceholder: true, currentSrc: '', isPlayingAction: false });
+        this.startIdleLoop();
+      }, 4800);
+    }
+  },
+
+  toggleMusic(e) {
+    this.setData({ musicOn: e.detail.value });
+  },
+
   goAR() {
-    wx.navigateTo({ url: `/pages/ar/index` });
+    wx.navigateTo({ url: '/pages/ar/index' });
   },
 });

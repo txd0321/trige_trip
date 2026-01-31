@@ -1,21 +1,33 @@
 <!-- pages/home/index.wxml -->
-<view class="container">
-  <!-- 精灵动画占位 -->
-  <view class="elf-wrapper">
-    <image class="elf-img" src="../../images/ai_example1.png" mode="aspectFit"></image>
+<view class="container" bindtap="handleTap">
+  <!-- 占位图 / 空状态插画 -->
+  <image
+    class="placeholder-img"
+    src="{{showEmptyState ? emptyIllustration : placeholderSrc}}"
+    mode="aspectFill"
+    wx:if="{{showPlaceholder || showEmptyState}}"
+  />
+
+  <!-- 全屏视频精灵 -->
+  <video
+    id="elfVideo"
+    class="elf-video"
+    src="{{currentSrc}}"
+    autoplay
+    loop="{{isLoop}}"
+    controls="false"
+    show-center-play-btn="false"
+    object-fit="cover"
+    bindloadedmetadata="onVideoLoaded"
+    bindplay="onVideoPlay"
+  />
+
+  <!-- 顶部栏 -->
+  <view class="top-bar">
+    <image class="logo" src="../../images/logo.png" mode="heightFix" />
+    <switch class="music-switch" checked="{{musicOn}}" bindchange="toggleMusic" />
   </view>
 
-  <!-- 聊天&卡牌列表 -->
-  <scroll-view class="card-list" scroll-y bindscrolltolower="loadMoreCards">
-    <block wx:for="{{cards}}" wx:key="id">
-      <view class="card-item" bindtap="openCard" data-id="{{item._id}}">
-        <image class="card-img" src="{{item.cover}}" mode="aspectFill"></image>
-        <text class="card-name">{{item.name}}</text>
-      </view>
-    </block>
-    <view wx:if="{{loading}}" class="loading">加载中...</view>
-  </scroll-view>
-
-  <!-- AR 探索按钮 -->
-  <button class="ar-btn" type="primary" bindtap="goAR">AR 探索</button>
+  <!-- AR 探索主按钮 -->
+  <button class="ar-btn" type="primary" catchtap="goAR">AR 探索</button>
 </view>
