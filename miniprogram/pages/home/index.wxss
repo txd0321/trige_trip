@@ -9,6 +9,9 @@
   background: #000;
 }
 
+.placeholder-img { z-index: 5; pointer-events: none; }
+.elf-video      { z-index: 1; }
+
 .placeholder-img,
 .elf-video {
   position: absolute;

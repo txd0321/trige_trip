@@ -19,7 +19,7 @@
     show-center-play-btn="false"
     object-fit="cover"
     bindloadedmetadata="onVideoLoaded"
-    bindplay="onVideoPlay"
+    bindplay="onVideoPlay" bindended="onVideoEnded"
   />
 
   <!-- 顶部栏 -->
