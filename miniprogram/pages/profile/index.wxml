@@ -1,22 +1,86 @@
-<view class="profile-container" bindtap="">
-  <view class="user-info">
-    <!-- 可选择头像按钮覆盖 -->
-    <button class="avatar-wrapper" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">
-      <image class="avatar" src="{{user.avatarUrl || '../../images/avatar.png'}}"></image>
+<view class="container">
+  <!-- 用户信息 -->
+  <view class="user-header">
+    <button class="avatar-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">
+      <image class="avatar" src="{{user.avatarUrl || '../../images/avatar.png'}}" mode="aspectFill"></image>
+      <view class="edit-icon">
+        <image src="../../images/icons/edit.png"></image>
+      </view>
     </button>
-
-    <!-- 昵称，可点击获取微信昵称或修改 -->
-    <text class="nickname" bindtap="onNicknameTap">{{user.nickname || '未登录'}}</text>
+    <view class="user-info">
+      <view class="nickname-row" bindtap="onNicknameTap">
+        <text class="nickname">{{user.nickname || '微信用户'}}</text>
+        <view class="edit-nickname-icon">
+          <image src="../../images/icons/edit.png"></image>
+        </view>
+      </view>
+      <text class="user-id">用户编号：{{user.id || '0000000001'}}</text>
+    </view>
   </view>
 
-  <view class="stats">
-    <view class="stat-item">
-      <text class="stat-num">{{summary.unlocked}}</text>
-      <text class="stat-label">已解锁</text>
+  <!-- 卡牌展示区 -->
+  <view class="section">
+    <view class="section-header">
+      <text class="title">我的卡牌</text>
+      <text class="count">{{summary.unlocked}}/{{summary.total}}</text>
     </view>
-    <view class="stat-item">
-      <text class="stat-num">{{summary.total}}</text>
-      <text class="stat-label">总卡牌</text>
+    <view class="card-grid" wx:if="{{userCards.length > 0}}">
+      <view class="card-wrapper" wx:for="{{userCards}}" wx:key="_id">
+        <view class="card-item">
+          <image class="card-img" src="{{item.image}}" mode="aspectFill"></image>
+          <text class="card-name">{{item.name}}</text>
+        </view>
+      </view>
+    </view>
+    <view class="empty-holder" wx:else>
+      <text>暂无卡牌，快去开启你的旅行吧</text>
+    </view>
+  </view>
+
+  <!-- 成就勋章区 -->
+  <view class="section">
+    <view class="section-header">
+      <text class="title">我的成就</text>
+      <text class="count">{{achievements.length}}/3</text>
+    </view>
+    <view class="achievement-grid" wx:if="{{achievements.length > 0}}">
+      <view class="achievement-item" wx:for="{{achievements}}" wx:key="id">
+        <view class="medal-box">
+          <image class="medal-icon" src="{{item.icon}}" mode="aspectFit"></image>
+          <text class="medal-name">{{item.name}}</text>
+        </view>
+      </view>
+    </view>
+    <view class="empty-holder" wx:else>
+      <text>暂无成就，继续加油哦</text>
+    </view>
+  </view>
+
+  <!-- 其他工具 -->
+  <view class="section">
+    <text class="group-label">其他工具</text>
+    <view class="tool-list">
+      <view class="tool-item" bindtap="onAbout">
+        <view class="tool-left">
+          <view class="icon-placeholder about"></view>
+          <view class="tool-info">
+            <text class="tool-title">关于我们</text>
+            <text class="tool-desc">你好，我们是Trige Studio！</text>
+          </view>
+        </view>
+        <image class="arrow-right" src="../../images/arrow.svg"></image>
+      </view>
+      <view class="divider"></view>
+      <view class="tool-item" bindtap="onFeedback">
+        <view class="tool-left">
+          <view class="icon-placeholder feedback"></view>
+          <view class="tool-info">
+            <text class="tool-title">意见反馈</text>
+            <text class="tool-desc">我们希望听到你们的声音</text>
+          </view>
+        </view>
+        <image class="arrow-right" src="../../images/arrow.svg"></image>
+      </view>
     </view>
   </view>
 </view>

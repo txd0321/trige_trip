@@ -29,24 +29,11 @@
           "launchMode": "default"
         },
         {
-          "name": "pages/card/detail",
-          "pathName": "pages/card/detail",
-          "query": "cupId=CUP_001",
-          "launchMode": "default",
-          "scene": null
-        },
-        {
           "name": "pages/home/index",
           "pathName": "pages/home/index",
           "query": "",
           "launchMode": "default",
-          "scene": null,
-          "partialCompile": {
-            "enabled": false,
-            "pages": [
-              "pages/card/detail"
-            ]
-          }
+          "scene": null
         }
       ]
     }

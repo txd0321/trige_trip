@@ -1,15 +1,27 @@
 <view class="container">
-  <view class="userinfo">
-    <!-- 正圆头像，按钮透明覆盖 -->
-    <view class="circle-wrapper">
-      <image class="avatar-img" src="{{userInfo.avatarUrl}}" mode="aspectFill" />
-      <button class="avatar-mask" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar"></button>
-    </view>
-
-    <input class="nickname-input" placeholder="请输入昵称" value="{{userInfo.nickName}}" bindtap="onNicknameTap" bindinput="onInputChange" />
+  <view class="header">
+    <text class="welcome-title">欢迎来到</text>
+    <text class="brand-title">Trige Trip</text>
+    <text class="subtitle">使用小程序的全部功能\n需要您设置头像和昵称</text>
   </view>
 
-  <button class="complete-btn" type="primary" bindtap="onCompleteTap" disabled="{{!(avatarReady && nameReady)}}">
-    完成
-  </button>
+  <view class="form-section">
+    <text class="section-hint">请完善个人信息内容</text>
+    
+    <view class="avatar-group">
+      <text class="label">头像</text>
+      <button class="avatar-wrapper" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">
+        <image class="avatar" src="{{avatarUrl || '../../images/avatar.png'}}" mode="aspectFill"></image>
+      </button>
+    </view>
+
+    <view class="nickname-group">
+      <text class="label">昵称</text>
+      <input type="nickname" class="nickname-input" placeholder="请输入昵称" value="{{nickname}}" bindinput="onNicknameBlur" bindblur="onNicknameBlur" />
+    </view>
+  </view>
+
+  <view class="footer">
+    <button class="confirm-btn" bindtap="onConfirm">确认</button>
+  </view>
 </view>

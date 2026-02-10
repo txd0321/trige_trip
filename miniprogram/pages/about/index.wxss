@@ -1,0 +1,42 @@
+.container {
+  padding: 40rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background-color: #F3FAFC;
+  min-height: 100vh;
+}
+
+.about-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 100rpx;
+  margin-bottom: 60rpx;
+}
+
+.logo {
+  width: 160rpx;
+  height: 160rpx;
+  border-radius: 40rpx;
+  margin-bottom: 30rpx;
+}
+
+.title {
+  font-size: 40rpx;
+  font-weight: 600;
+  color: #333333;
+}
+
+.content {
+  padding: 40rpx;
+  background: #FFFFFF;
+  border-radius: 32rpx;
+  box-shadow: 0 4rpx 20rpx rgba(166, 171, 189, 0.1);
+}
+
+.desc {
+  font-size: 28rpx;
+  line-height: 1.6;
+  color: #666666;
+}

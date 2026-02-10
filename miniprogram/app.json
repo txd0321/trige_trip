@@ -7,6 +7,8 @@
     "pages/card/detail",
     "pages/home/index",
     "pages/profile/index",
+    "pages/about/index",
+    "pages/feedback/index",
     "pages/index/index",
     "pages/example/index"
   ],

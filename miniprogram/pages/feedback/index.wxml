@@ -1,0 +1,9 @@
+<view class="container">
+  <view class="feedback-card">
+    <textarea class="feedback-input" placeholder="请输入您的反馈意见..." bindinput="onInput"></textarea>
+  </view>
+  <button class="submit-btn" bindtap="onSubmit">提交反馈</button>
+  <view class="contact-info">
+    <text>我们希望听到您的声音，您的反馈对我们非常重要。</text>
+  </view>
+</view>

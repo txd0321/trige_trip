@@ -1,30 +1,140 @@
-/* ---- Template Styles ---- */
 page {
-  background-color: #f8f8f8;
+  background-color: #EAFBFF;
   height: 100%;
 }
+
 .container {
-  min-height: 100%;
+  padding: 60px 20px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  padding: 40rpx;
+  align-items: center; /* 全局子元素水平居中 */
+  height: 100%;
   box-sizing: border-box;
+  text-align: center; /* 文字内容居中 */
 }
-.userinfo {
+
+.header {
+  margin-top: 10px;
+  margin-bottom: 80px;
+  width: 100%;
+}
+
+.welcome-title {
+  display: block;
+  font-size: 30px;
+  font-weight: 600;
+  color: #333333;
+  line-height: 1.3;
+}
+
+.brand-title {
+  display: block;
+  font-size: 20px;
+  font-weight: 400;
+  color: #333333;
+  margin-top: 10px;
+}
+
+.subtitle {
+  display: block;
+  font-size: 12px;
+  color: #666666;
+  margin: 15px auto 0;
+  line-height: 1.5;
+  width: 100%;
+  max-width: 280px;
+}
+
+.form-section {
+  flex: 1;
   width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
-  background: white;
-  border-radius: 24rpx;
-  padding: 60rpx 40rpx;
-  box-shadow: 0 4rpx 24rpx rgba(0, 0, 0, 0.05);
-  margin-bottom: 40rpx;
-  gap: 40rpx;
 }
-.circle-wrapper { width:160rpx;height:160rpx;position:relative;}
-.avatar-img{width:100%;height:100%;border-radius:50%;display:block;}
-.avatar-mask{position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;border:none;background:transparent;line-height:0;}
-.nickname-input{width:80%;height:88rpx;border:2rpx solid #e0e0e0;border-radius:12rpx;padding:0 24rpx;font-size:30rpx;}
-.complete-btn{width:80%;height:96rpx;line-height:96rpx;border-radius:48rpx;font-size:32rpx;background:linear-gradient(135deg,#28a745,#20c997);color:#fff;margin-top:80rpx;}
+
+.section-hint {
+  display: block;
+  font-size: 12px;
+  color: #999999;
+  margin-bottom: 25px;
+}
+
+.avatar-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 30px;
+  width: 100%;
+}
+
+.nickname-group {
+  margin-bottom: 30px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: #333333;
+  margin-bottom: 12px;
+}
+
+.avatar-wrapper {
+  padding: 0 !important;
+  width: 70px !important;
+  height: 70px !important;
+  border-radius: 50%;
+  background-color: #FFFFFF;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 0 !important;
+  border: none;
+}
+
+.avatar-wrapper::after {
+  border: none;
+}
+
+.avatar {
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+}
+
+.nickname-input {
+  width: 80%;
+  height: 47px;
+  background: #FFFFFF;
+  border: 1px solid #F1ECEC;
+  border-radius: 12px;
+  padding: 0 16px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.footer {
+  margin-bottom: 30px;
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.confirm-btn {
+  width: 150px !important;
+  height: 50px;
+  background: #000000;
+  border-radius: 28px;
+  color: #FFFFFF;
+  font-size: 16px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+}

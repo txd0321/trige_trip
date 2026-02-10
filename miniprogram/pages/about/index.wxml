@@ -1,0 +1,9 @@
+<view class="container">
+  <view class="about-header">
+    <image class="logo" src="../../images/avatar.png" mode="aspectFit"></image>
+    <text class="title">Trige Studio</text>
+  </view>
+  <view class="content">
+    <text class="desc">你好，我们是Trige Studio！致力于提供最优质的旅行体验，帮助每一位旅行者发现世界的美好。</text>
+  </view>
+</view>

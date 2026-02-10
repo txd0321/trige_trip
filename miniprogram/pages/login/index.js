@@ -2,30 +2,36 @@
 const defaultAvatarUrl = 'https://mmbiz.qpic.cn/mmbiz/icTdbqWNOwNRna42FI242Lcia07jQodd2FJGIYQfG0LAJGFxM4FbnQP6yfMxBgJ0F3YRqJCJ1aPAK2dQagdusBZg/0';
 Page({
   data: {
-    userInfo: { avatarUrl: defaultAvatarUrl, nickName: '' },
-    avatarReady: false,
-    nameReady: false,
+    avatarUrl: defaultAvatarUrl,
+    nickname: '',
     logged: false,
   },
   onChooseAvatar(e) {
-    this.setData({ 'userInfo.avatarUrl': e.detail.avatarUrl, avatarReady: true });
+    this.setData({
+      avatarUrl: e.detail.avatarUrl
+    });
   },
-  onNicknameTap() {
-    if (this.data.nameReady) return;
-    wx.getUserProfile({ desc: '获取微信昵称', success: (r) => this.setData({ 'userInfo.nickName': r.userInfo.nickName, nameReady: true }) });
+  onNicknameBlur(e) {
+    this.setData({
+      nickname: e.detail.value
+    });
   },
-  onInputChange(e) {
-    const v = e.detail.value; this.setData({ 'userInfo.nickName': v, nameReady: !!v });
-  },
-  onCompleteTap() {
-    if (!(this.data.avatarReady && this.data.nameReady)) return;
-    const { avatarUrl, nickName } = this.data.userInfo;
+  onConfirm() {
+    const { avatarUrl, nickname } = this.data;
+    if (!nickname) {
+      wx.showToast({ title: '请输入昵称', icon: 'none' });
+      return;
+    }
     const finish = () => {
-      wx.cloud.callFunction({ name: 'updateUser', data: { avatarUrl, nickname: nickName } });
+      wx.cloud.callFunction({ name: 'updateUser', data: { avatarUrl, nickname } });
       wx.navigateTo({ url: '/pages/loading/index' });
     };
     if (!this.data.logged) {
-      wx.cloud.callFunction({ name: 'login' }).then((r) => { wx.setStorageSync('openid', r.result.openid); this.setData({ logged: true }); finish(); });
+      wx.cloud.callFunction({ name: 'login' }).then((r) => {
+        wx.setStorageSync('openid', r.result.openid);
+        this.setData({ logged: true });
+        finish();
+      });
     } else finish();
   },
 });
