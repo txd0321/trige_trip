@@ -70,6 +70,13 @@ Page({
     patternStr: '',
     canvasWidth: 0,
     canvasHeight: 0,
+    cupId: '' // 存储待解锁的卡牌 ID
+  },
+
+  onLoad(options) {
+    if (options.cupId) {
+      this.setData({ cupId: options.cupId });
+    }
   },
 
   onReady() {
@@ -279,9 +286,33 @@ Page({
     this.lockCnt = 0;
 
     if (collected.length >= TOTAL_COUNT) {
-      wx.showToast({ title: '扫描完成', icon: 'success' });
       this.listener && this.listener.stop();
-      setTimeout(() => wx.navigateTo({ url: '/pages/winder/index' }), 1200);
+      
+      // 如果携带了 cupId，说明是卡牌解锁流程
+      if (this.data.cupId) {
+        wx.showLoading({ title: '正在解锁...' });
+        wx.cloud.callFunction({
+          name: 'unlockCard',
+          data: { cupId: this.data.cupId }
+        }).then(res => {
+          wx.hideLoading();
+          if (res.result.success) {
+            wx.showToast({ title: '卡牌已解锁', icon: 'success' });
+            setTimeout(() => wx.navigateBack(), 1500);
+          } else {
+            wx.showToast({ title: '解锁失败', icon: 'none' });
+            setTimeout(() => wx.navigateBack(), 1500);
+          }
+        }).catch(err => {
+          wx.hideLoading();
+          wx.showToast({ title: '网络错误', icon: 'none' });
+          setTimeout(() => wx.navigateBack(), 1500);
+        });
+      } else {
+        // 原有的普通扫描逻辑
+        wx.showToast({ title: '扫描完成', icon: 'success' });
+        setTimeout(() => wx.navigateTo({ url: '/pages/winder/index' }), 1200);
+      }
     }
   },
 });

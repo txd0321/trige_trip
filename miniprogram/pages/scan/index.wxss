@@ -1,0 +1,66 @@
+.container {
+  width: 100%;
+  height: 100vh;
+  position: relative;
+  background-color: #000;
+}
+
+camera {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.scan-mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.scan-frame {
+  width: 500rpx;
+  height: 500rpx;
+  border: 2rpx solid #EE8924; /* 整体橙色边框 */
+  background: transparent;
+  position: relative;
+  box-shadow: 0 0 0 1000px rgba(0, 0, 0, 0.5);
+}
+
+/* Corner borders removed to avoid stacking issues */
+
+.scan-tip {
+  margin-top: 40rpx;
+  color: #FFFFFF;
+  font-size: 28rpx;
+  text-shadow: 0 2rpx 4rpx rgba(0, 0, 0, 0.5);
+}
+
+.footer {
+  position: absolute;
+  bottom: 100rpx;
+  left: 0;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.back-btn {
+  width: 240rpx;
+  height: 80rpx;
+  background: #000000;
+  color: #FFFFFF;
+  border-radius: 40rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28rpx;
+}

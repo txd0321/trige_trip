@@ -1,0 +1,13 @@
+<view class="container">
+  <camera mode="scanCode" bindscancode="onScanCode" frame-size="large">
+    <view class="scan-mask">
+      <view class="scan-frame"></view>
+      <view class="scan-tip">将卡片二维码放入框内即可自动扫描</view>
+      
+      <!-- 将按钮移入 mask 内部进行绝对定位 -->
+      <view class="footer">
+        <button class="back-btn" bindtap="goBack">返回</button>
+      </view>
+    </view>
+  </camera>
+</view>

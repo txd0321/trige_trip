@@ -1,6 +1,4 @@
-[
-  { "_id": "card001", "name": "橘子精灵", "cupType": "CUP_001", "cover": "https://example.com/cover1.png" },
-  { "_id": "card002", "name": "柠檬精灵", "cupType": "CUP_002", "cover": "https://example.com/cover2.png" },
-  { "_id": "card003", "name": "草莓精灵", "cupType": "CUP_003", "cover": "https://example.com/cover3.png" },
-  { "_id": "card004", "name": "蓝莓精灵", "cupType": "CUP_004", "cover": "https://example.com/cover4.png" }
-]
+{"_id":"card001","name":"橘子精灵","cupType":"CUP_001","cover":"https://example.com/cover1.png"}
+{"_id":"card002","name":"柠檬精灵","cupType":"CUP_002","cover":"https://example.com/cover2.png"}
+{"_id":"card003","name":"草莓精灵","cupType":"CUP_003","cover":"https://example.com/cover3.png"}
+{"_id":"card004","name":"蓝莓精灵","cupType":"CUP_004","cover":"https://example.com/cover4.png"}

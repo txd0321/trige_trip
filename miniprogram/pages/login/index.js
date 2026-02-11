@@ -22,16 +22,44 @@ Page({
       wx.showToast({ title: '请输入昵称', icon: 'none' });
       return;
     }
-    const finish = () => {
-      wx.cloud.callFunction({ name: 'updateUser', data: { avatarUrl, nickname } });
-      wx.navigateTo({ url: '/pages/loading/index' });
+    wx.showLoading({ title: '同步中...' });
+
+    const finish = (finalAvatarUrl) => {
+      wx.cloud.callFunction({ 
+        name: 'updateUser', 
+        data: { avatarUrl: finalAvatarUrl, nickname } 
+      }).then(() => {
+        wx.hideLoading();
+        wx.navigateTo({ url: '/pages/loading/index' });
+      });
     };
+
+    const uploadAvatar = () => {
+      // 如果是临时路径，则上传
+      if (avatarUrl.startsWith('http://tmp') || avatarUrl.startsWith('wxfile://tmp')) {
+        const cloudPath = `avatars/${Date.now()}-${Math.floor(Math.random() * 1000)}.png`;
+        wx.cloud.uploadFile({
+          cloudPath,
+          filePath: avatarUrl,
+          success: res => finish(res.fileID),
+          fail: err => {
+            wx.hideLoading();
+            wx.showToast({ title: '头像上传失败', icon: 'none' });
+          }
+        });
+      } else {
+        finish(avatarUrl);
+      }
+    };
+
     if (!this.data.logged) {
       wx.cloud.callFunction({ name: 'login' }).then((r) => {
         wx.setStorageSync('openid', r.result.openid);
         this.setData({ logged: true });
-        finish();
+        uploadAvatar();
       });
-    } else finish();
+    } else {
+      uploadAvatar();
+    }
   },
 });

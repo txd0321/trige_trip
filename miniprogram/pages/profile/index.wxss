@@ -13,18 +13,19 @@ page {
 /* 用户信息区 */
 .user-header {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  padding: 40rpx 32rpx; /* 16px 间隔 */
-  margin-bottom: 20rpx;
+  padding: 52rpx 32rpx 20rpx; /* 上内边距从 60rpx 减为 52rpx (减少 4px) */
+  margin-bottom: 18rpx;
   width: 100%;
   box-sizing: border-box;
 }
 
 .avatar-btn {
   padding: 0 !important;
-  margin: 0 !important;
-  width: 120rpx !important; /* 调整后的宽度 */
-  height: 120rpx !important; /* 调整后的高度 */
+  margin: 0 0 28rpx 0 !important; /* 增加 4px (8rpx) 间距 */
+  width: 116rpx !important; /* 增加 4px (8rpx) */
+  height: 116rpx !important; /* 增加 4px (8rpx) */
   border-radius: 50%;
   position: relative;
   background: none;
@@ -32,24 +33,24 @@ page {
 }
 
 .avatar {
-  width: 120rpx;
-  height: 120rpx;
+  width: 116rpx;
+  height: 116rpx;
   border-radius: 50%;
   background: #D9D9D9;
 }
 
 .edit-icon {
   position: absolute;
-  right: 0;
+  right: -10rpx;
   bottom: 0;
-  width: 36rpx;
-  height: 36rpx;
+  width: 30rpx;
+  height: 30rpx;
   background: #EE8924;
   border-radius: 50%;
   display: flex;
   justify-content: center;
   align-items: center;
-  border: 4rpx solid #F3FAFC;
+  border: 1rpx solid #F3FAFC;
 }
 
 .edit-icon image {
@@ -58,20 +59,33 @@ page {
 }
 
 .user-info {
-  margin-left: 40rpx;
+  margin-left: 0;
   display: flex;
   flex-direction: column;
+  align-items: center; /* 确保整体居中 */
+  width: 100%;
 }
 
 .nickname-row {
   display: flex;
   align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+/* 增加一个与右侧图标等宽的透明占位，确保文字视觉居中 */
+.nickname-row::before {
+  content: "";
+  width: 40rpx; /* 图标 28rpx + 间距 12rpx */
+  height: 1px;
+  flex-shrink: 0;
 }
 
 .nickname {
-  font-size: 40rpx;
+  font-size: 36rpx; /* 从 32rpx 增加到 36rpx */
   font-weight: 600;
   color: #333333;
+  line-height: 1.2;
 }
 
 .edit-nickname-icon {
@@ -79,6 +93,7 @@ page {
   height: 28rpx;
   margin-left: 12rpx;
   opacity: 0.6;
+  flex-shrink: 0;
 }
 
 .edit-nickname-icon image {
@@ -88,79 +103,168 @@ page {
 
 .user-id {
   font-size: 24rpx;
-  color: #666666;
-  margin-top: 10rpx;
+  color: #999999;
+  margin-top: 12rpx; /* 从 16rpx 缩小到 12rpx */
+  text-align: center;
 }
 
 /* 通用版块样式 */
 .section {
   margin-bottom: 50rpx;
-  padding: 0 32rpx; /* 严格 16px 间隔 */
+  padding: 0 32rpx;
   width: 100%;
   box-sizing: border-box;
 }
 
 .section-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start; /* 改为左对齐 */
   align-items: center;
   margin-bottom: 24rpx;
 }
 
+.title-group {
+  display: flex;
+  align-items: center;
+}
+
 .title {
   font-size: 28rpx;
+  font-weight: normal;
+  color: #666666;
+}
+
+.add-card-btn {
+  display: flex;
+  align-items: center;
+  margin-left: 20rpx;
+  background: #FFFFFF;
+  padding: 6rpx 16rpx;
+  border-radius: 20rpx;
+  box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
+}
+
+.add-card-btn text {
+  font-size: 22rpx;
+  color: #EE8924;
+  margin-right: 8rpx;
   font-weight: 600;
-  color: #333333;
+}
+
+.add-icon {
+  width: 28rpx;
+  height: 28rpx;
+  background: #EE8924;
+  color: #FFFFFF;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 24rpx;
+  font-weight: bold;
 }
 
 .count {
   font-size: 28rpx;
   color: #333333;
+  margin-left: 60rpx; /* 标题右侧 30px */
 }
 
-/* 卡牌网格 */
+/* 卡牌展示 */
 .card-grid {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column; /* 改为纵向列表，内部项为横向长卡片 */
   gap: 20rpx;
 }
 
-.card-wrapper {
-  width: 210rpx;
+.card-placeholder {
+  width: 100%;
 }
 
-.card-item {
-  width: 100%;
-  height: 280rpx;
+.placeholder-item {
+  width: 100%; /* 长是左右各离边框16px（由父级section的padding实现） */
+  height: 200rpx; /* 高100px = 200rpx */
   background: #FFFFFF;
-  border-radius: 32rpx;
-  box-shadow: 0 4rpx 20rpx rgba(166, 171, 189, 0.3);
+  border-radius: 32rpx; /* 圆角16px = 32rpx */
   display: flex;
-  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.placeholder-item.dashed {
+  border: 4rpx dashed #CCCCCC;
+  background: transparent;
+  box-sizing: border-box;
+}
+
+.add-content {
+  display: flex;
+  flex-direction: row; /* 改为横向排列 */
   align-items: center;
   justify-content: center;
 }
 
+.add-icon-large {
+  width: 48rpx; /* 稍微缩小图标以适配横向排版 */
+  height: 48rpx;
+  background: #EE8924;
+  color: #FFFFFF;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 32rpx;
+  font-weight: bold;
+  margin-right: 16rpx; /* 间距移到右边 */
+}
+
+.add-text {
+  font-size: 24rpx;
+  color: #999999;
+  font-weight: 500;
+}
+
+.card-wrapper {
+  width: 100%;
+}
+
+.card-item {
+  width: 100%;
+  height: 200rpx; /* 统一高度 100px */
+  background: #FFFFFF;
+  border-radius: 32rpx;
+  box-shadow: 0 4rpx 20rpx rgba(166, 171, 189, 0.3);
+  display: flex;
+  flex-direction: row; /* 内容横向排列 */
+  align-items: center;
+  padding: 0 30rpx;
+  box-sizing: border-box;
+}
+
 .card-img {
-  width: 180rpx;
-  height: 180rpx;
+  width: 140rpx;
+  height: 140rpx;
   border-radius: 16rpx;
+  flex-shrink: 0;
 }
 
 .card-name {
-  font-size: 24rpx;
+  font-size: 28rpx;
   color: #333333;
-  margin-top: 20rpx;
+  margin-top: 0;
+  margin-left: 30rpx; /* 文字移到图片右侧 */
+  font-weight: 600;
 }
 
-/* 成就网格 */
+/* 成就展示 */
 .achievement-grid {
   display: flex;
-  gap: 20rpx;
+  justify-content: space-between; /* 左右贴边，中间均分 */
+  width: 100%;
 }
 
 .achievement-item {
-  width: 210rpx;
+  width: 210rpx; /* 保持原有宽度 */
 }
 
 .medal-box {
@@ -175,9 +279,32 @@ page {
   align-items: center;
 }
 
-.medal-icon {
-  width: 110rpx;
-  height: 110rpx;
+.medal-box.locked {
+  background: #E8F1F5;
+  box-shadow: none;
+  border: 2rpx solid rgba(166, 171, 189, 0.2);
+}
+
+.lock-icon {
+  width: 40rpx;
+  height: 40rpx;
+  background: #9098A3;
+  margin-bottom: 16rpx;
+  /* 简单的 CSS 锁头形状 */
+  position: relative;
+  border-radius: 4rpx;
+}
+
+.lock-icon::before {
+  content: '';
+  position: absolute;
+  top: -12rpx;
+  left: 8rpx;
+  width: 24rpx;
+  height: 20rpx;
+  border: 4rpx solid #9098A3;
+  border-bottom: none;
+  border-radius: 12rpx 12rpx 0 0;
 }
 
 .medal-name {
@@ -186,11 +313,16 @@ page {
   margin-top: 12rpx;
 }
 
+.medal-box.locked .medal-name {
+  color: #9098A3;
+  font-weight: 500;
+}
+
 /* 其他工具样式 */
 .group-label {
   font-size: 28rpx;
-  color: #9098A3;
-  font-weight: 600;
+  color: #666666; /* 改为与标题一致的颜色 */
+  font-weight: normal;
   margin-bottom: 20rpx;
   display: block;
 }
@@ -213,11 +345,6 @@ page {
   text-align: left;
 }
 
-.feedback-btn {
-  width: 100% !important;
-  margin: 0;
-}
-
 .tool-left {
   display: flex;
   align-items: center;
@@ -237,7 +364,7 @@ page {
 }
 
 .tool-title {
-  font-size: 28rpx;
+  font-size: 32rpx;
   font-weight: 600;
   color: #333333;
 }
@@ -256,20 +383,4 @@ page {
 .divider {
   height: 1rpx;
   background: #EEEEEE;
-}
-
-.empty-holder {
-  width: 100%;
-  height: 160rpx;
-  background: #FFFFFF;
-  border-radius: 32rpx;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  box-shadow: 0 4rpx 20rpx rgba(166, 171, 189, 0.1);
-}
-
-.empty-holder text {
-  font-size: 24rpx;
-  color: #999999;
 }

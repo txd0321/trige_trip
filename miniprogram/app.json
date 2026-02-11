@@ -9,6 +9,8 @@
     "pages/profile/index",
     "pages/about/index",
     "pages/feedback/index",
+    "pages/scan/index",
+    "pages/cup-scan/index",
     "pages/index/index",
     "pages/example/index"
   ],
@@ -23,6 +25,7 @@
   "style": "v2",
   "lazyCodeLoading": "requiredComponents",
   "tabBar": {
+    "custom": true,
     "color": "#999999",
     "selectedColor": "#FF7A23",
     "backgroundColor": "#FFFFFF",

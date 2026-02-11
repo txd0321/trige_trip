@@ -1,20 +1,57 @@
 Page({
-  data: { loading: true, error: '', card: {}, repeat: false },
+  data: { 
+    loading: true, 
+    error: '', 
+    card: {}, 
+    unlocked: false, // 是否已经解锁
+    cupId: '' 
+  },
   onLoad(options) {
     const cupId = options.cupId || '';
     if (!cupId) return this.setData({ loading: false, error: '缺少 cupId' });
-    wx.cloud.callFunction({ name: 'unlockCard', data: { cupId } })
+    this.setData({ cupId });
+  },
+
+  onShow() {
+    if (this.data.cupId) {
+      this.fetchCardStatus(this.data.cupId);
+    }
+  },
+
+  // 获取卡牌信息及解锁状态
+  fetchCardStatus(cupId) {
+    wx.cloud.callFunction({ 
+      name: 'unlockCard', 
+      data: { cupId, checkOnly: true } 
+    })
       .then(({ result }) => {
-        if (!result.success) {
-          this.setData({ loading: false, error: result.error || '解锁失败' });
+        if (!result || !result.success) {
+          this.setData({ 
+            loading: false, 
+            error: `卡牌不存在 (ID: ${cupId})` 
+          });
           return;
         }
         this.setData({
           loading: false,
           card: result.cardInfo,
-          repeat: result.repeat,
+          unlocked: result.repeat,
         });
       })
       .catch(() => this.setData({ loading: false, error: '网络错误' }));
   },
+
+  // 跳转到 杯子识别 页面进行扫描解锁
+  onUnlock() {
+    if (this.data.unlocked) return;
+    wx.navigateTo({
+      url: `/pages/cup-scan/index?cupId=${this.data.cupId}`
+    });
+  },
+
+  goBack() {
+    wx.switchTab({
+      url: '/pages/profile/index'
+    });
+  }
 });

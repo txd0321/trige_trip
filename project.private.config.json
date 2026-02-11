@@ -22,11 +22,32 @@
     "miniprogram": {
       "list": [
         {
+          "name": "pages/card/detail",
+          "pathName": "pages/card/detail",
+          "query": "cupId=CUP_001",
+          "scene": null,
+          "launchMode": "default"
+        },
+        {
+          "name": "pages/ar/index",
+          "pathName": "pages/ar/index",
+          "query": "",
+          "launchMode": "default",
+          "scene": null
+        },
+        {
+          "name": "pages/index/index",
+          "pathName": "pages/index/index",
+          "query": "",
+          "launchMode": "default",
+          "scene": null
+        },
+        {
           "name": "pages/profile/index",
           "pathName": "pages/profile/index",
           "query": "",
-          "scene": null,
-          "launchMode": "default"
+          "launchMode": "default",
+          "scene": null
         },
         {
           "name": "pages/home/index",

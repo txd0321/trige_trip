@@ -35,6 +35,11 @@ Page({
     this.wasHidden = true;
   },
   onShow() {
+    if (typeof this.getTabBar === 'function' && this.getTabBar()) {
+      this.getTabBar().setData({
+        selected: 0
+      })
+    }
     // 第一次 onShow 会在 onLoad 之后立即触发，此时由 onLoad 负责首帧播放
     if (this.wasHidden) {
       this.wasHidden = false;

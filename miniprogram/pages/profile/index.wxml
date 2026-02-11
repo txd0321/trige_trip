@@ -21,19 +21,26 @@
   <!-- 卡牌展示区 -->
   <view class="section">
     <view class="section-header">
-      <text class="title">我的卡牌</text>
+      <view class="title-group">
+        <text class="title">我的卡牌</text>
+      </view>
       <text class="count">{{summary.unlocked}}/{{summary.total}}</text>
     </view>
     <view class="card-grid" wx:if="{{userCards.length > 0}}">
       <view class="card-wrapper" wx:for="{{userCards}}" wx:key="_id">
-        <view class="card-item">
+        <view class="card-item" bindtap="onCardTap" data-id="{{item.cupType}}">
           <image class="card-img" src="{{item.image}}" mode="aspectFill"></image>
           <text class="card-name">{{item.name}}</text>
         </view>
       </view>
     </view>
-    <view class="empty-holder" wx:else>
-      <text>暂无卡牌，快去开启你的旅行吧</text>
+    <view class="card-placeholder" wx:else>
+      <view class="placeholder-item dashed" bindtap="onAddCard">
+        <view class="add-content">
+          <view class="add-icon-large">+</view>
+          <text class="add-text">添加卡牌</text>
+        </view>
+      </view>
     </view>
   </view>
 
@@ -51,8 +58,13 @@
         </view>
       </view>
     </view>
-    <view class="empty-holder" wx:else>
-      <text>暂无成就，继续加油哦</text>
+    <view class="achievement-grid" wx:else>
+      <view class="achievement-item" wx:for="{{[1,2,3]}}" wx:key="*this">
+        <view class="medal-box locked" bindtap="onLockedAchievementTap">
+          <view class="lock-icon"></view>
+          <text class="medal-name">未解锁</text>
+        </view>
+      </view>
     </view>
   </view>
 

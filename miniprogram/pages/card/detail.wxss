@@ -1,14 +1,144 @@
-.page{
-  min-height:100vh;
-  display:flex;
-  flex-direction:column;
-  justify-content:center;
-  align-items:center;
-  background:#fff;
+.container {
+  height: 100vh; /* 固定高度以支持推至底部 */
+  background-color: #F3FAFC;
+  display: flex;
+  flex-direction: column;
+  padding: 40rpx 32rpx 128rpx; /* 底部内边距设为 64px (128rpx) */
+  box-sizing: border-box;
 }
-.tip{color:#888;font-size:28rpx;}
-.cover{width:300rpx;height:400rpx;margin-bottom:40rpx;border-radius:16rpx;box-shadow:0 4rpx 16rpx rgba(0,0,0,0.1);}
-.name{font-size:36rpx;font-weight:bold;margin-bottom:20rpx;}
-.desc{font-size:28rpx;color:#666;padding:0 40rpx;text-align:center;}
-.success{color:#07c160;font-size:32rpx;margin-top:20rpx;}
-.repeat{color:#999;font-size:32rpx;margin-top:20rpx;}
+
+.loading-state, .error-state {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.tip {
+  font-size: 28rpx;
+  color: #999999;
+}
+
+.card-detail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  height: 100%; /* 撑满父容器 */
+}
+
+.card-image-box {
+  width: 500rpx;
+  height: 660rpx;
+  background: #FFFFFF;
+  border-radius: 40rpx;
+  box-shadow: 0 10rpx 40rpx rgba(166, 171, 189, 0.3);
+  overflow: hidden;
+  position: relative;
+  margin-top: 188rpx;
+  margin-bottom: 60rpx;
+  transition: all 0.5s ease;
+}
+
+.card-image-box.locked {
+  filter: grayscale(100%) brightness(80%);
+}
+
+.cover {
+  width: 100%;
+  height: 100%;
+}
+
+.top-lock-wrapper {
+  margin-top: 60rpx;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 120rpx;
+}
+
+.lock-icon {
+  width: 60rpx;
+  height: 60rpx;
+  background: #333333;
+  border-radius: 10rpx;
+  position: relative;
+}
+
+.lock-icon::before {
+  content: '';
+  position: absolute;
+  top: -20rpx;
+  left: 12rpx;
+  width: 36rpx;
+  height: 30rpx;
+  border: 6rpx solid #333333;
+  border-bottom: none;
+  border-radius: 18rpx 18rpx 0 0;
+}
+
+.info-section {
+  text-align: center;
+  margin-bottom: 40rpx;
+}
+
+.name {
+  font-size: 44rpx;
+  font-weight: 600;
+  color: #333333;
+  display: block;
+  margin-bottom: 20rpx;
+}
+
+.desc {
+  font-size: 28rpx;
+  color: #666666;
+  line-height: 1.6;
+  padding: 0 40rpx;
+  display: block;
+}
+
+.action-section {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: auto; /* 核心：利用自动边距将按钮区域推至底部 */
+}
+
+.status-tag {
+  padding: 8rpx 24rpx;
+  border-radius: 20rpx;
+  font-size: 24rpx;
+  margin-bottom: 30rpx;
+}
+
+.status-tag.pending {
+  background: rgba(238, 137, 36, 0.1);
+  color: #EE8924;
+}
+
+.status-tag.success {
+  background: rgba(7, 193, 96, 0.1);
+  color: #07C160;
+}
+
+.primary-btn {
+  width: 400rpx !important;
+  height: 100rpx;
+  background: #000000;
+  color: #FFFFFF;
+  border-radius: 50rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32rpx;
+  font-weight: 600;
+  margin: 0; /* 移除之前的手动边距 */
+}
+
+.primary-btn.secondary {
+  background: #FFFFFF;
+  color: #333333;
+  border: 2rpx solid #EEEEEE;
+}

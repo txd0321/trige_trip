@@ -1,15 +1,34 @@
-<view class="page" wx:if="{{loading}}">
-  <text class="tip">加载中...</text>
-</view>
+<view class="container">
+  <view class="loading-state" wx:if="{{loading}}">
+    <text class="tip">加载中...</text>
+  </view>
 
-<view class="page" wx:elif="{{error}}">
-  <text class="tip">{{error}}</text>
-</view>
+  <view class="error-state" wx:elif="{{error}}">
+    <text class="tip">{{error}}</text>
+  </view>
 
-<view class="page" wx:else>
-  <image class="cover" src="{{card.cover}}" mode="aspectFit"></image>
-  <text class="name">{{card.name}}</text>
-  <text class="desc" wx:if="{{card.desc}}">{{card.desc}}</text>
-  <text class="repeat" wx:if="{{repeat}}">已解锁</text>
-  <text class="success" wx:else>解锁成功！</text>
+  <view class="card-detail" wx:else>
+    <view class="card-image-box {{unlocked ? '' : 'locked'}}">
+      <image class="cover" src="{{card.cover}}" mode="aspectFit"></image>
+      <view class="lock-overlay" wx:if="{{!unlocked}}">
+        <view class="lock-icon"></view>
+      </view>
+    </view>
+
+    <view class="info-section">
+      <text class="name">{{card.name}}</text>
+      <text class="desc" wx:if="{{card.desc}}">{{card.desc}}</text>
+    </view>
+
+    <view class="action-section">
+      <block wx:if="{{unlocked}}">
+        <view class="status-tag success">已解锁</view>
+        <button class="primary-btn secondary" bindtap="goBack">返回个人中心</button>
+      </block>
+      <block wx:else>
+        <view class="status-tag pending">待解锁</view>
+        <button class="primary-btn" bindtap="onUnlock">开启旅程</button>
+      </block>
+    </view>
+  </view>
 </view>

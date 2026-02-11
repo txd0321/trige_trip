@@ -14,7 +14,10 @@ exports.main = async (event, context) => {
     .get()
 
   if (record.data.length) {
-    return record.data[0]
+    return {
+      ...record.data[0],
+      openid: record.data[0]._openid // 统一返回 openid 字段名
+    }
   }
 
   // 2. 若不存在则创建空白记录
@@ -22,7 +25,8 @@ exports.main = async (event, context) => {
     avatarUrl: '',
     nickname: '',
     createdAt: db.serverDate(),
+    _openid: OPENID
   }
   await users.add({ data: newUser })
-  return { ...newUser, _openid: OPENID }
+  return { ...newUser, openid: OPENID }
 }

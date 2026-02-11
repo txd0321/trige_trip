@@ -1,0 +1,104 @@
+.container {
+  width: 100%;
+  height: 100vh;
+  position: relative;
+  background-color: #000;
+}
+
+camera {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.scan-mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.recognition-frame {
+  width: 540rpx;
+  height: 540rpx;
+  border: 4rpx solid #FFFFFF;
+  border-radius: 40rpx;
+  margin-top: 200rpx;
+  position: relative;
+  box-shadow: 0 0 0 1000px rgba(0, 0, 0, 0.5);
+}
+
+.tip-box {
+  margin-top: 60rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.main-tip {
+  color: #FFFFFF;
+  font-size: 32rpx;
+  font-weight: 600;
+  margin-bottom: 16rpx;
+}
+
+.sub-tip {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 24rpx;
+}
+
+.recognition-status {
+  position: absolute;
+  bottom: 250rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.recognition-status text {
+  color: #EE8924;
+  font-size: 28rpx;
+  margin-top: 20rpx;
+}
+
+.loading-spinner {
+  width: 60rpx;
+  height: 60rpx;
+  border: 4rpx solid rgba(238, 137, 36, 0.3);
+  border-top: 4rpx solid #EE8924;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.footer {
+  position: absolute;
+  bottom: 80rpx;
+  left: 0;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.back-btn {
+  width: 240rpx;
+  height: 80rpx;
+  background: #000000;
+  color: #FFFFFF;
+  border-radius: 40rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28rpx;
+}
