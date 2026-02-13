@@ -13,15 +13,22 @@ Page({
   },
   onShow() {
     if (typeof this.getTabBar === 'function' && this.getTabBar()) {
-      this.getTabBar().setData({
-        selected: 1
-      })
+      const tabBar = this.getTabBar();
+      if (tabBar.data.selected !== 1) {
+        tabBar.setData({
+          selected: 1
+        })
+      }
     }
     this.fetchProfile();
+  },
+  onUnload() {
+    this.isUnloaded = true;
   },
   fetchProfile() {
     // --- 调试模式：展示全集齐状态 ---
     if (this.data.debugFullState) {
+      if (this.isUnloaded) return;
       this.setData({
         userCards: [
           { _id: 'mock1', name: 'CUPI', image: 'https://miniapp-assets-cupi-1327655007.cos.ap-guangzhou.myqcloud.com/ui/logo.png' },
@@ -39,12 +46,12 @@ Page({
       return;
     }
 
-    // --- 真实模式：从数据库获取数据 ---
     const db = wx.cloud.database();
     
     // 1. 获取用户信息（头像、昵称）
     wx.cloud.callFunction({ name: 'getProfile' })
       .then((res) => {
+        if (this.isUnloaded) return;
         if (res.result) {
           this.setData({ 
             user: { 
@@ -56,12 +63,16 @@ Page({
       });
 
     // 2. 获取总卡牌数
-    db.collection('cards').count().then((res) => this.setData({ 'summary.total': res.total || 0 }));
+    db.collection('cards').count().then((res) => {
+      if (this.isUnloaded) return;
+      this.setData({ 'summary.total': res.total || 0 });
+    });
     
     const openid = wx.getStorageSync('openid') || '';
     if (openid) {
       // 3. 获取用户已解锁卡牌数量
       db.collection('user_cards').where({ _openid: openid }).count().then((res) => {
+        if (this.isUnloaded) return;
         const unlockedCount = res.total;
         this.setData({ 'summary.unlocked': unlockedCount });
 
@@ -73,11 +84,13 @@ Page({
 
       // 4. 获取用户已解锁卡牌的具体列表
       db.collection('user_cards').where({ _openid: openid }).get().then(res => {
+        if (this.isUnloaded) return;
         const cardIds = res.data.map(uc => uc.cardId);
         if (cardIds.length > 0) {
           db.collection('cards').where({
             _id: db.command.in(cardIds)
           }).get().then(cardsRes => {
+            if (this.isUnloaded) return;
             this.setData({ userCards: cardsRes.data });
           });
         } else {

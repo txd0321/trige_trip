@@ -7,7 +7,19 @@ Page({
     cupId: '' 
   },
   onLoad(options) {
-    const cupId = options.cupId || '';
+    let cupId = options.cupId || '';
+    
+    // --- 核心修改：处理普通链接二维码跳转 ---
+    if (options.q) {
+      const url = decodeURIComponent(options.q);
+      // 假设您的链接格式为 https://yourdomain.com/card?cupId=CUP_001
+      // 或者 https://yourdomain.com/card/CUP_001
+      const match = url.match(/[?&]cupId=([^&]+)/) || url.match(/\/card\/([^?]+)/);
+      if (match && match[1]) {
+        cupId = match[1];
+      }
+    }
+
     if (!cupId) return this.setData({ loading: false, error: '缺少 cupId' });
     this.setData({ cupId });
   },

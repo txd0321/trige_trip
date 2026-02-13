@@ -6,6 +6,9 @@ Page({
     nickname: '',
     logged: false,
   },
+  onLoad() {
+    console.log('>>> [Login] onLoad 开始');
+  },
   onChooseAvatar(e) {
     this.setData({
       avatarUrl: e.detail.avatarUrl

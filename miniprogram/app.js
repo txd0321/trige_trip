@@ -1,6 +1,7 @@
 // app.js
 App({
   onLaunch: function () {
+    console.log('>>> [App] onLaunch 开始');
     this.globalData = {
       // env 参数说明：
       // env 参数决定接下来小程序发起的云开发调用（wx.cloud.xxx）会请求到哪个云环境的资源

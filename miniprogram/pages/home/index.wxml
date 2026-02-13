@@ -8,19 +8,21 @@
     wx:if="{{showPlaceholder || showEmptyState}}"
   />
 
-  <!-- 全屏视频精灵 -->
-  <video
+  <!-- 全屏视频精灵 (临时注释进行排查) -->
+  <!-- <video
     id="elfVideo"
     class="elf-video"
     src="{{currentSrc}}"
     autoplay
     loop="{{isLoop}}"
-    controls="false"
-    show-center-play-btn="false"
+    controls="{{false}}"
+    show-center-play-btn="{{false}}"
     object-fit="cover"
     bindloadedmetadata="onVideoLoaded"
-    bindplay="onVideoPlay" bindended="onVideoEnded"
-  />
+    bindplay="onVideoPlay" 
+    bindended="onVideoEnded"
+    binderror="onVideoError"
+  /> -->
 
   <!-- 顶部栏 -->
   <view class="top-bar">
@@ -29,5 +31,5 @@
   </view>
 
   <!-- AR 探索主按钮 -->
-  <button class="ar-btn" type="primary" catchtap="goAR">AR 探索</button>
+  <view class="ar-btn" catchtap="goAR">AR</view>
 </view>

@@ -36,9 +36,10 @@ Page({
   },
   onShow() {
     if (typeof this.getTabBar === 'function' && this.getTabBar()) {
-      this.getTabBar().setData({
-        selected: 0
-      })
+      const tabBar = this.getTabBar();
+      if (tabBar.data.selected !== 0) {
+        tabBar.setData({ selected: 0 });
+      }
     }
     // 第一次 onShow 会在 onLoad 之后立即触发，此时由 onLoad 负责首帧播放
     if (this.wasHidden) {
@@ -84,12 +85,49 @@ Page({
     }
   },
   onVideoPlay() {
-    this.setData({ showPlaceholder: false });
+    if (this.data.showPlaceholder) {
+      this.setData({ showPlaceholder: false });
+    }
+  },
+
+  onVideoError(e) {
+    console.error('视频播放出错:', e.detail.errMsg);
+    
+    // 如果在模拟器中，视频报错极易导致卡死，我们直接降级为“静态模式”
+    const sysInfo = wx.getSystemInfoSync();
+    if (sysInfo.platform === 'devtools') {
+      console.warn('检测到模拟器环境视频加载失败，已开启性能保护模式：禁用视频渲染');
+      this.setData({ 
+        currentSrc: '', 
+        showPlaceholder: true,
+        isPlayingAction: false 
+      });
+      // 在模拟器中不再通过 idleTimer 重新尝试播放视频
+      clearTimeout(this.idleTimer);
+      return; 
+    }
+
+    // 真机环境保持原有的自动恢复逻辑
+    this.setData({ 
+      currentSrc: '', 
+      showPlaceholder: true,
+      isPlayingAction: false 
+    });
+    clearTimeout(this.idleTimer);
+    this.idleTimer = setTimeout(() => {
+      this.playCatlook();
+    }, 20000); 
   },
 
   onVideoEnded() {
-    // 无论是 catlook 还是点击动作，播放完都回到 catstop
-    this.setData({ showPlaceholder: true, currentSrc: '', isPlayingAction: false });
+    // 无论是 catlook 还是点击动作，播放完都回到空状态展示占位图
+    if (!this.data.showPlaceholder || this.data.currentSrc !== '') {
+      this.setData({ 
+        showPlaceholder: true, 
+        currentSrc: '', 
+        isPlayingAction: false 
+      });
+    }
     // 进入 idle：catstop 停留 10s 后再播放一次 catlook
     this.scheduleIdle();
   },

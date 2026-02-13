@@ -15,13 +15,22 @@ Page({
     this.setData({ recognizing: true });
     
     // 模拟 3 秒后识别成功
-    setTimeout(() => {
-      this.doUnlock();
+    this.recognitionTimer = setTimeout(() => {
+      if (!this.isUnloaded) {
+        this.doUnlock();
+      }
     }, 3000);
   },
 
+  onUnload() {
+    this.isUnloaded = true;
+    if (this.recognitionTimer) {
+      clearTimeout(this.recognitionTimer);
+    }
+  },
+
   doUnlock() {
-    if (!this.data.cupId) return;
+    if (!this.data.cupId || this.isUnloaded) return;
 
     wx.showLoading({ title: '匹配成功' });
     
@@ -29,21 +38,33 @@ Page({
       name: 'unlockCard',
       data: { cupId: this.data.cupId }
     }).then(res => {
+      if (this.isUnloaded) return;
       wx.hideLoading();
       if (res.result && res.result.success) {
         wx.showToast({ title: '卡牌已解锁', icon: 'success' });
         // 延迟返回，让用户看清成功提示
-        setTimeout(() => {
-          wx.navigateBack();
+        this.returnTimer = setTimeout(() => {
+          if (!this.isUnloaded) {
+            wx.navigateBack();
+          }
         }, 1500);
       } else {
         wx.showToast({ title: '解锁失败', icon: 'none' });
-        setTimeout(() => wx.navigateBack(), 1500);
+        this.returnTimer = setTimeout(() => {
+          if (!this.isUnloaded) {
+            wx.navigateBack();
+          }
+        }, 1500);
       }
     }).catch(err => {
+      if (this.isUnloaded) return;
       wx.hideLoading();
       wx.showToast({ title: '网络错误', icon: 'none' });
-      setTimeout(() => wx.navigateBack(), 1500);
+      this.returnTimer = setTimeout(() => {
+        if (!this.isUnloaded) {
+          wx.navigateBack();
+        }
+      }, 1500);
     });
   },
 

@@ -30,15 +30,17 @@
 }
 
 .circle-btn.active {
-  background: #333333;
+  background: #87CEFA;
   transform: scale(1.1);
 }
 
 .icon {
   width: 50rpx;
   height: 50rpx;
+  /* 将图标颜色强制转为白色 */
+  filter: brightness(0) invert(1);
 }
 
 .circle-btn.active .icon {
-  filter: invert(100%) brightness(200%);
+  /* 移除反色滤镜，直接显示激活图标的颜色 */
 }

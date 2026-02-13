@@ -2,7 +2,7 @@ Component({
   data: {
     selected: 0,
     color: "#999999",
-    selectedColor: "#333333",
+    selectedColor: "#87CEFA",
     list: [{
       pagePath: "/pages/home/index",
       iconPath: "/images/icons/home.png",
@@ -19,7 +19,9 @@ Component({
     switchTab(e) {
       const data = e.currentTarget.dataset
       const url = data.path
-      wx.switchTab({ url })
+      wx.switchTab({
+        url: url
+      })
     }
   }
 })

@@ -111,8 +111,22 @@ Page({
     this.gridSmooth = new Array(SEGMENTS).fill(null);
   },
 
+  onHide() {
+    this.stopScanning();
+  },
+
   onUnload() {
-    this.listener && this.listener.stop();
+    this.stopScanning();
+  },
+
+  stopScanning() {
+    if (this.listener) {
+      this.listener.stop();
+    }
+    if (this.overlayCtx) {
+      this.overlayCtx.clearRect(0, 0, this.windowWidth, this.windowHeight);
+      this.overlayCtx.draw();
+    }
   },
 
   handleFrame(frame) {
