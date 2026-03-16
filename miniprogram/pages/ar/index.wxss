@@ -1,8 +1,0 @@
-.page{position:fixed;top:0;left:0;width:100vw;height:100vh;overflow:hidden;background:#000;}
-.camera{position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:0;background:#000;}
-.overlay{position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:1;pointer-events:none;background:transparent;}
-.scan-frame{position:fixed;top:50%;left:50%;width:100rpx;height:700rpx;transform:translate(-50%,-50%);border:4rpx solid rgba(255,255,255,.8);border-radius:8rpx;box-sizing:border-box;z-index:2;pointer-events:none;display:block;/*enable children placement*/}
-/* 五等分横线 */
-.h-divider{position:absolute;left:0;width:100%;height:2rpx;background:rgba(255,255,255,.8);} 
-.status-text{position:fixed;top:120rpx;left:0;width:100%;text-align:center;font-size:28rpx;color:#fff;z-index:3;pointer-events:none;}
-.progress{position:fixed;top:200rpx;left:0;width:100%;text-align:left;color:#fff;z-index:3;padding-left:24rpx;box-sizing:border-box;pointer-events:none;}

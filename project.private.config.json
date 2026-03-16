@@ -1,4 +1,6 @@
 {
+  "miniprogramRoot": "miniprogram/",
+  "cloudfunctionRoot": "cloudfunctions/",
   "setting": {
     "compileHotReLoad": true,
     "urlCheck": false,
@@ -22,11 +24,18 @@
     "miniprogram": {
       "list": [
         {
+          "name": "pages/ar/index",
+          "pathName": "pages/ar/index",
+          "query": "",
+          "scene": null,
+          "launchMode": "default"
+        },
+        {
           "name": "pages/card/detail",
           "pathName": "pages/card/detail",
           "query": "cupId=CUP_001",
-          "scene": null,
-          "launchMode": "default"
+          "launchMode": "default",
+          "scene": null
         },
         {
           "name": "pages/ar/index",

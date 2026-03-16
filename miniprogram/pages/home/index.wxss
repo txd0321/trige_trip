@@ -22,7 +22,7 @@
   object-fit: cover;
 }
 
-.ar-btn {
+.xr-btn {
   position: fixed;
   bottom: calc(env(safe-area-inset-bottom) + 180rpx); /* 向上抬高一点，避开 TabBar */
   right: 16px;

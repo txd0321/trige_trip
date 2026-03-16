@@ -1,6 +1,0 @@
-<view class="page">
-  <view class="nav-bar" bindtap="goHome">
-    <image class="icon-back" src="../../images/icons/close.png" mode="aspectFit"></image>
-  </view>
-  <text class="tip">发条解锁占位页</text>
-</view>

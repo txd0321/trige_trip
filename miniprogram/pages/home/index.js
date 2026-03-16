@@ -136,7 +136,7 @@ Page({
     this.setData({ musicOn: e.detail.value });
   },
 
-  goAR() {
-    wx.navigateTo({ url: '/pages/ar/index' });
+  goXR() {
+    wx.navigateTo({ url: '/pages/xr-interaction/index' });
   },
 });

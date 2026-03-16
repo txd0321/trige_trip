@@ -2,15 +2,13 @@
   "pages": [
     "pages/login/index",
     "pages/loading/index",
-    "pages/ar/index",
-    "pages/winder/index",
+    "pages/xr-interaction/index",
     "pages/card/detail",
     "pages/home/index",
     "pages/profile/index",
     "pages/about/index",
     "pages/feedback/index",
     "pages/scan/index",
-    "pages/cup-scan/index",
     "pages/index/index",
     "pages/example/index"
   ],

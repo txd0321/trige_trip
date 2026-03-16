@@ -1,0 +1,63 @@
+<view class="page">
+  <camera class="camera" device-position="back" flash="off" frame-size="small" wx:if="{{step !== 'blow' && step !== 'done'}}" />
+
+  <view class="candle-bg" wx:if="{{step === 'blow' || step === 'done'}}">
+    <image class="candle-image" src="/assets/images/candle.png" mode="aspectFit" />
+  </view>
+
+  <canvas
+    canvas-id="overlay"
+    class="overlay"
+    style="width:100vw;height:100vh;"
+    width="{{canvasWidth}}"
+    height="{{canvasHeight}}"
+  />
+
+  <canvas canvas-id="collectCropCanvas" class="collect-crop-canvas" style="width:512px;height:512px;" />
+
+  <view class="top-bar">
+    <view class="top-back" bindtap="goHome">返回</view>
+    <view class="top-title">XR互动</view>
+  </view>
+
+  <view class="status-text" wx:if="{{step === 'scan'}}">{{scanPattern}}</view>
+  <view class="status-hint" wx:if="{{step === 'scan' && scanHint}}">{{scanHint}}</view>
+
+  <view class="scan-frame" wx:if="{{step === 'scan' && scanState !== 'completed'}}">
+    <view class="h-divider" style="top:20%;"></view>
+    <view class="h-divider" style="top:40%;"></view>
+    <view class="h-divider" style="top:60%;"></view>
+    <view class="h-divider" style="top:80%;"></view>
+    <view class="h-divider" style="top:calc(100% - 4rpx);"></view>
+  </view>
+
+  <view class="progress" wx:if="{{step === 'scan'}}">
+    <text>{{collected.length}} / 13 已收集</text>
+    <progress percent="{{percent}}" active stroke-width="6" activeColor="#FF7A23" />
+  </view>
+
+  <view class="winder-stage" wx:if="{{step === 'winder'}}" bindtouchstart="onWinderRotateStart" bindtouchmove="onWinderRotateMove" bindtouchend="onWinderRotateEnd">
+    <view class="winder-frame"></view>
+    <view class="winder-arrow" wx:if="{{winderStatus !== 'scan'}}"></view>
+    <view class="winder-progress" wx:if="{{winderStatus === 'rotating' || winderStatus === 'completed'}}">
+      <view class="winder-progress-inner" style="transform:rotate({{rotateDegree}}deg);"></view>
+    </view>
+    <view class="winder-text">{{winderHint}}</view>
+    <view class="guide-card" wx:if="{{showGuideCard}}">8秒未对齐，试试将发条放在框内并保持稳定</view>
+  </view>
+
+  <view class="blow-stage" wx:if="{{step === 'blow' || step === 'done'}}">
+    <view class="blow-tip">{{blowHint}}</view>
+    <view class="blow-wave" wx:if="{{blowState === 'listening'}}"></view>
+  </view>
+
+  <view class="achievement" wx:if="{{showAchievement}}">
+    <view class="achievement-card">
+      <view class="achievement-title">恭喜解锁成就</view>
+      <view class="achievement-sub">生日快乐</view>
+      <view class="achievement-actions">
+        <view class="btn primary" bindtap="goHome">返回主页</view>
+      </view>
+    </view>
+  </view>
+</view>

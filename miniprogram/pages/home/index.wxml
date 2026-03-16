@@ -30,6 +30,6 @@
     <switch class="music-switch" checked="{{musicOn}}" bindchange="toggleMusic" />
   </view>
 
-  <!-- AR 探索主按钮 -->
-  <view class="ar-btn" catchtap="goAR">AR</view>
+  <!-- XR 互动主按钮 -->
+  <view class="xr-btn" catchtap="goXR">XR</view>
 </view>

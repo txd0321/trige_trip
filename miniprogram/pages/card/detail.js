@@ -53,11 +53,11 @@ Page({
       .catch(() => this.setData({ loading: false, error: '网络错误' }));
   },
 
-  // 跳转到 杯子识别 页面进行扫描解锁
+  // 跳转到 XR 互动页进行扫描解锁
   onUnlock() {
     if (this.data.unlocked) return;
     wx.navigateTo({
-      url: `/pages/cup-scan/index?cupId=${this.data.cupId}`
+      url: `/pages/xr_interaction/index?cupId=${this.data.cupId}`
     });
   },
 
