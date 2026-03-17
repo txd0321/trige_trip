@@ -34,7 +34,7 @@ function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
 }
 
-function mapUiRectToImage(uiRect, uiSize, imgSize) {
+function mapRectCoverToUi(imgRect, imgSize, uiSize) {
   const uiAspect = uiSize.width / uiSize.height;
   const imgAspect = imgSize.width / imgSize.height;
 
@@ -43,18 +43,18 @@ function mapUiRectToImage(uiRect, uiSize, imgSize) {
   let offsetY = 0;
 
   if (imgAspect > uiAspect) {
-    scale = imgSize.height / uiSize.height;
-    offsetX = (imgSize.width - uiSize.width * scale) / 2;
+    scale = uiSize.height / imgSize.height;
+    offsetX = (uiSize.width - imgSize.width * scale) / 2;
   } else {
-    scale = imgSize.width / uiSize.width;
-    offsetY = (imgSize.height - uiSize.height * scale) / 2;
+    scale = uiSize.width / imgSize.width;
+    offsetY = (uiSize.height - imgSize.height * scale) / 2;
   }
 
   return {
-    x: Math.round(uiRect.x * scale + offsetX),
-    y: Math.round(uiRect.y * scale + offsetY),
-    width: Math.round(uiRect.width * scale),
-    height: Math.round(uiRect.height * scale),
+    x: Math.round(imgRect.x * scale + offsetX),
+    y: Math.round(imgRect.y * scale + offsetY),
+    width: Math.round(imgRect.width * scale),
+    height: Math.round(imgRect.height * scale),
   };
 }
 
@@ -123,27 +123,17 @@ Page({
       avgLatency: 0,
     },
     lastDebugText: '',
-    useSnapshotMode: true,
-    snapshotImage: '',
-    snapshotRoiPreview: '',
-    snapshotRoiRaw: '',
-    snapshotCanvasWidth: 512,
-    cachedSnapshots: [],
-    useMock: false,
-    mockIndex: 0,
-    snapshotCanvasHeight: 512,
-    snapshotMaskReady: true,
-    snapshotMaskLeft: 0,
-    snapshotMaskTop: 0,
-    snapshotMaskWidth: 0,
-    snapshotMaskHeight: 0,
-    snapshotMaskDebug: '',
+    freezeDetect: false,
     uiRoiX: 0,
     uiRoiY: 0,
     uiRoiW: 0,
     uiRoiH: 0,
     maskSafeTop: 0,
     maskTopHeight: 0,
+    cameraWrapLeft: 0,
+    cameraWrapTop: 0,
+    cameraWrapWidth: 0,
+    cameraWrapHeight: 0,
   },
 
   onLoad(options) {
@@ -171,16 +161,40 @@ Page({
       windowHeight: this.windowHeight,
     });
 
-    this.uiRoiW = Math.floor((140 * this.windowWidth) / 750);
-    this.uiRoiH = Math.floor((760 * this.windowWidth) / 750);
-    this.uiRoiX = Math.floor(this.windowWidth / 2 - this.uiRoiW / 2);
-    this.uiRoiY = Math.floor(this.windowHeight / 2 - this.uiRoiH / 2);
-
     const safeTop = Math.max(0, sysInfo.statusBarHeight || 0);
+    const safeBottom = Math.max(0, sysInfo.safeAreaInsets ? sysInfo.safeAreaInsets.bottom || 0 : 0);
+    const availableH = this.windowHeight - safeTop - safeBottom;
+    const targetRatio = 4 / 3;
+
+    let cameraWrapWidth = this.windowWidth;
+    let cameraWrapHeight = Math.round(cameraWrapWidth * targetRatio);
+    if (cameraWrapHeight > availableH) {
+      cameraWrapHeight = availableH;
+      cameraWrapWidth = Math.round(cameraWrapHeight / targetRatio);
+    }
+
+    const cameraWrapLeft = Math.round((this.windowWidth - cameraWrapWidth) / 2);
+    const cameraWrapTop = Math.round(safeTop + (availableH - cameraWrapHeight) / 2);
+
+    this.uiRoiW = Math.floor((140 * cameraWrapWidth) / 750);
+    this.uiRoiH = Math.floor((760 * cameraWrapWidth) / 750);
+    this.uiRoiX = Math.floor(cameraWrapLeft + cameraWrapWidth / 2 - this.uiRoiW / 2);
+    this.uiRoiY = Math.floor(cameraWrapTop + cameraWrapHeight / 2 - this.uiRoiH / 2);
+
     const topOverlayRpx = 300;
-    const topOverlayPx = Math.floor((topOverlayRpx * this.windowWidth) / 750);
+    const topOverlayPx = Math.floor((topOverlayRpx * cameraWrapWidth) / 750);
     const maskSafeTop = Math.max(safeTop, topOverlayPx);
     const maskTopHeight = Math.max(0, this.uiRoiY - maskSafeTop);
+
+    this.roiRectOnCamera = {
+      x: this.uiRoiX - cameraWrapLeft,
+      y: this.uiRoiY - cameraWrapTop,
+      width: this.uiRoiW,
+      height: this.uiRoiH,
+    };
+
+    this.roiRatioW = this.uiRoiW / cameraWrapWidth;
+    this.roiRatioH = this.uiRoiH / cameraWrapHeight;
 
     this.setData({
       uiRoiW: this.uiRoiW,
@@ -189,18 +203,13 @@ Page({
       uiRoiY: this.uiRoiY,
       maskSafeTop: maskSafeTop,
       maskTopHeight: maskTopHeight,
+      cameraWrapLeft,
+      cameraWrapTop,
+      cameraWrapWidth,
+      cameraWrapHeight,
     });
 
-    const fallback = { left: 0, top: 0, width: this.windowWidth, height: this.windowHeight };
-    this.cameraRect = fallback;
-    this.setData({
-      snapshotMaskLeft: fallback.left,
-      snapshotMaskTop: fallback.top,
-      snapshotMaskWidth: fallback.width,
-      snapshotMaskHeight: fallback.height,
-      snapshotMaskReady: true,
-      snapshotMaskDebug: `fallback:${fallback.width}x${fallback.height}`,
-    });
+    this.cameraRect = { left: 0, top: 0, width: this.windowWidth, height: this.windowHeight };
 
     setTimeout(() => {
       wx.createSelectorQuery()
@@ -215,13 +224,6 @@ Page({
             width: this.uiRoiW,
             height: this.uiRoiH,
           };
-          this.setData({
-            snapshotMaskLeft: rect.left,
-            snapshotMaskTop: rect.top,
-            snapshotMaskWidth: rect.width,
-            snapshotMaskHeight: rect.height,
-            snapshotMaskDebug: `rect:${Math.round(rect.width)}x${Math.round(rect.height)}`,
-          });
         })
         .exec();
     }, 200);
@@ -248,11 +250,18 @@ Page({
     this.blowRmsBuffer = [];
     this.blowAboveStart = 0;
 
-    if (!this.data.useSnapshotMode) {
-      this.listener = this.camCtx.onCameraFrame(this.handleFrame.bind(this));
-      this.listener.start();
-    } else {
-      this.listener = null;
+    this.listener = this.camCtx.onCameraFrame(this.handleFrame.bind(this));
+    this.listener.start();
+  },
+
+  toggleFreezeDetect() {
+    const next = !this.data.freezeDetect;
+    this.setData({ freezeDetect: next });
+    this.freezeOnceSent = false;
+    if (!next) {
+      this.frozenFrame = null;
+      this.frozenFrameW = 0;
+      this.frozenFrameH = 0;
     }
   },
 
@@ -479,12 +488,75 @@ Page({
     return { ok: true, idx: stableIdx };
   },
 
+  getFrameRoi(frameW, frameH) {
+    const ratioW = Number(this.roiRatioW || 0.18);
+    const ratioH = Number(this.roiRatioH || 0.7);
+    const roiW = Math.max(10, Math.floor(frameW * ratioW));
+    const roiH = Math.max(60, Math.floor(frameH * ratioH));
+    const roiX = clamp(Math.floor((frameW - roiW) / 2), 0, Math.max(0, frameW - roiW));
+    const roiY = clamp(Math.floor((frameH - roiH) / 2), 0, Math.max(0, frameH - roiH));
+    return { roiX, roiY, roiW, roiH };
+  },
+
+  updateUiRoiFromFrame(frameW, frameH) {
+    const baseRect = this.cameraRect || { left: 0, top: 0, width: this.windowWidth, height: this.windowHeight };
+    const { roiX, roiY, roiW, roiH } = this.getFrameRoi(frameW, frameH);
+    const mapped = mapRectCoverToUi(
+      { x: roiX, y: roiY, width: roiW, height: roiH },
+      { width: frameW, height: frameH },
+      { width: baseRect.width, height: baseRect.height }
+    );
+
+    this.setData({
+      uiRoiX: mapped.x + baseRect.left,
+      uiRoiY: mapped.y + baseRect.top,
+      uiRoiW: mapped.width,
+      uiRoiH: mapped.height,
+    });
+  },
+
   async handleFrame(frame) {
-    if (this.data.useSnapshotMode) return;
     const { width, height } = frame;
     if (!width || !height || !frame.data) return;
 
     if (this.data.step !== 'scan' && this.data.step !== 'winder') return;
+
+    const baseRect = this.cameraRect || { left: 0, top: 0, width: this.windowWidth, height: this.windowHeight };
+    const scaleX = width / baseRect.width;
+    const scaleY = height / baseRect.height;
+
+    if (this.data.freezeDetect) {
+      if (!this.frozenFrame) {
+        this.frozenFrame = new Uint8Array(frame.data);
+        this.frozenFrameW = width;
+        this.frozenFrameH = height;
+      }
+      if (this.data.step === 'scan') {
+        this.updateUiRoiFromFrame(this.frozenFrameW, this.frozenFrameH);
+      }
+      if (!this.freezeOnceSent) {
+        await this.processFrameData(this.frozenFrame, this.frozenFrameW, this.frozenFrameH, scaleX, scaleY, baseRect);
+        this.freezeOnceSent = true;
+      }
+      return;
+    }
+
+    this.lastFrameW = width;
+    this.lastFrameH = height;
+
+    if (!this.stableFrameW || !this.stableFrameH) {
+      this.stableFrameW = width;
+      this.stableFrameH = height;
+    }
+
+    if (this.data.step === 'scan') {
+      this.updateUiRoiFromFrame(width, height);
+    }
+    await this.processFrameData(new Uint8Array(frame.data), width, height, scaleX, scaleY, baseRect);
+  },
+
+  async processFrameData(yPlane, width, height, scaleX, scaleY, baseRect) {
+    if (!this.data.freezeDetect) return;
 
     const now = Date.now();
     const tuner = this.data.tuner || {};
@@ -494,24 +566,17 @@ Page({
     if (now - this.lastRequestAt < interval) return;
     this.lastRequestAt = now;
 
-    const scaleX = width / this.windowWidth;
-    const scaleY = height / this.windowHeight;
-    const yPlane = new Uint8Array(frame.data);
-
     if (this.data.step === 'scan') {
-      await this.handleScanFrame(yPlane, width, height, scaleX, scaleY);
+      await this.handleScanFrame(yPlane, width, height);
     } else if (this.data.step === 'winder') {
-      await this.handleWinderFrame(yPlane, width, height, scaleX, scaleY);
+      await this.handleWinderFrame(yPlane, width, height, scaleX, scaleY, baseRect);
     }
   },
 
-  async handleScanFrame(yPlane, width, height, scaleX, scaleY) {
+  async handleScanFrame(yPlane, width, height) {
     if (this.requestPending || this.data.scanState === 'cooldown' || this.data.scanState === 'matched') return;
 
-    const roiW = Math.max(10, Math.floor(this.uiRoiW * scaleX));
-    const roiH = Math.max(60, Math.floor(this.uiRoiH * scaleY));
-    const roiX = clamp(Math.floor(this.uiRoiX * scaleX), 0, Math.max(0, width - roiW));
-    const roiY = clamp(Math.floor(this.uiRoiY * scaleY), 0, Math.max(0, height - roiH));
+    const { roiX, roiY, roiW, roiH } = this.getFrameRoi(width, height);
 
     const samples = [];
     const sx = Math.max(2, Math.floor(roiW / 8));
@@ -521,9 +586,21 @@ Page({
         samples.push(yPlane[y * width + x]);
       }
     }
-    const threshold = clamp(Math.floor(samples.reduce((a, b) => a + b, 0) / Math.max(1, samples.length) * 0.82), 35, 210);
+    const avgSample = samples.reduce((a, b) => a + b, 0) / Math.max(1, samples.length);
 
-    const boxes = this.detectOrderedBoxes(yPlane, width, roiX, roiY, roiW, roiH, threshold) || this.getFallbackBoxes(roiX, roiY, roiW, roiH);
+    const stableDiff = Math.abs(avgSample - (this.roiLastAvg || avgSample));
+    if (stableDiff < 10) {
+      this.roiStableCount = (this.roiStableCount || 0) + 1;
+    } else {
+      this.roiStableCount = 0;
+    }
+    this.roiLastAvg = avgSample;
+
+    if (!this.data.freezeDetect && this.roiStableCount < 2) {
+      return;
+    }
+
+    const boxes = this.getFallbackBoxes(roiX, roiY, roiW, roiH);
 
     const roiGray = new Uint8Array(roiW * roiH);
     let k = 0;
@@ -579,20 +656,49 @@ Page({
 
     this.requestPending = false;
     this.scanTimeoutCount = 0;
-    if (!result || !Array.isArray(result.slots)) return;
+    if (!result) return;
 
-    const labels = result.slots.slice(0, SEGMENTS);
-    const safeLabels = labels.map((label) => {
-      if (!label) return 'unknown';
-      return label;
-    });
     const frameMinConf = Number((this.data.tuner && this.data.tuner.frameMinConf) || this.data.frameMinConf);
-    const confs = new Array(SEGMENTS).fill(Number(result.confidence || 0));
+    const shapeItems = Array.isArray(result.items) ? result.items : Array.isArray(result.shapes) ? result.shapes : null;
 
+    let orderedLabels = [];
+    let orderedShapes = [];
+    let score = 0;
+
+    if (shapeItems && shapeItems.length) {
+      const normalized = shapeItems
+        .map((item) => {
+          const label = item.label || item.type || item.cls || item.class || item.shape;
+          const y = Number(item.y ?? item.cy ?? item.centerY ?? item.center_y);
+          const confidence = Number(item.confidence ?? item.score ?? item.prob);
+          return {
+            label: label || 'unknown',
+            y,
+            confidence: Number.isFinite(confidence) ? confidence : null,
+          };
+        })
+        .filter((item) => Number.isFinite(item.y));
+
+      if (!normalized.length) return;
+      orderedShapes = normalized.slice().sort((a, b) => a.y - b.y);
+      orderedLabels = orderedShapes.map((item) => item.label || 'unknown');
+      if (orderedLabels.length !== SEGMENTS) return;
+
+      const confList = orderedShapes.map((item) =>
+        Number.isFinite(item.confidence) ? item.confidence : Number(result.confidence || 0)
+      );
+      score = confList.reduce((sum, v) => sum + v, 0) / Math.max(1, confList.length);
+    } else {
+      if (!Array.isArray(result.slots)) return;
+      orderedLabels = result.slots.slice(0, SEGMENTS).map((label) => label || 'unknown');
+      score = Number(result.confidence || 0);
+    }
+
+    const safeLabels = orderedLabels.map((label) => label || 'unknown');
     const tunerStats = this.data.tunerStats || {};
     const countMap = { ...tunerStats };
     countMap.total = (countMap.total || 0) + 1;
-    labels.forEach((label) => {
+    safeLabels.forEach((label) => {
       const key = label || 'unknown';
       countMap[key] = (countMap[key] || 0) + 1;
     });
@@ -603,26 +709,29 @@ Page({
     const patternSymbols = safeLabels.map((c) => (c === 'circle' ? '●' : c === 'cross' ? '❌' : c === 'empty' ? '—' : '?'));
     const patternStr = patternSymbols.join(' ');
     if (patternStr !== this.data.scanPattern) this.setData({ scanPattern: patternStr, scanHint: '' });
+    if (this.data.freezeDetect) {
+      if (this.freezeDisplayTimer) clearTimeout(this.freezeDisplayTimer);
+      this.freezeDisplayTimer = setTimeout(() => {
+        if (this.data.freezeDetect) this.setData({ scanPattern: '' });
+      }, 2000);
+    }
 
-    this.drawOverlay(boxes, safeLabels, scaleX, scaleY);
+    const baseRect = this.cameraRect || { left: 0, top: 0, width: this.windowWidth, height: this.windowHeight };
+    const overlayScaleX = width / baseRect.width;
+    const overlayScaleY = height / baseRect.height;
+    const overlayOffsetX = baseRect.left;
+    const overlayOffsetY = baseRect.top;
+
+    this.drawOverlay(boxes, safeLabels, overlayScaleX, overlayScaleY, overlayOffsetX, overlayOffsetY);
 
     const circleCount = safeLabels.filter((x) => x === 'circle').length;
+    const crossCount = safeLabels.filter((x) => x === 'cross').length;
     const unknownCount = safeLabels.filter((x) => x === 'unknown').length;
-    if (unknownCount > 1 || circleCount > 1) return;
+    const emptyCount = safeLabels.filter((x) => x === 'empty').length;
+    if (safeLabels.length !== SEGMENTS || circleCount !== 1 || crossCount !== 4 || unknownCount > 0 || emptyCount > 0) return;
 
-    let circleIdx = null;
-    let score = 0;
-    for (let i = 0; i < SEGMENTS; i++) {
-      if (safeLabels[i] === 'circle') {
-        circleIdx = i;
-        score = Number(confs[i] || 0);
-        break;
-      }
-      if (safeLabels[i] === 'cross' || safeLabels[i] === 'empty') {
-        score += Number(confs[i] || 0);
-      }
-    }
-    if (circleIdx === null) score = score / SEGMENTS;
+    const circleIdx = safeLabels.findIndex((label) => label === 'circle');
+    if (circleIdx < 0) return;
     if (score < frameMinConf) return;
 
     const stable = this.pushVoteAndGetStable(circleIdx, score);
@@ -801,30 +910,28 @@ Page({
     ctx.restore();
     await new Promise((resolve) => ctx.draw(false, resolve));
 
-    const mapped = mapUiRectToImage(
-      {
-        x: this.uiRoiX,
-        y: this.uiRoiY,
-        width: this.uiRoiW,
-        height: this.uiRoiH,
-      },
-      { width: this.windowWidth, height: this.windowHeight },
+    // IMPORTANT: takePhoto 的图片与 camera 预览的裁切/缩放可能不一致。
+    // 为了保证“UI 框内容 == 识别裁剪内容”，这里将 takePhoto 图片裁剪映射到与相机帧一致的 ROI。
+    // 具体做法：先在“假想相机帧尺寸(targetW/targetH)”里取 ROI（getFrameRoi），再用 cover 的反向映射
+    // 投影到 takePhoto 实际图片(drawW/drawH)上得到最终裁剪区域。
+
+    const frameW = Number(this.stableFrameW || this.lastFrameW || drawW);
+    const frameH = Number(this.stableFrameH || this.lastFrameH || drawH);
+    const targetW = frameW;
+    const targetH = frameH;
+
+    const frameRoi = this.getFrameRoi(targetW, targetH);
+    const mapped = mapRectCoverToImage(
+      { x: frameRoi.roiX, y: frameRoi.roiY, width: frameRoi.roiW, height: frameRoi.roiH },
+      { width: targetW, height: targetH },
       { width: drawW, height: drawH }
     );
-
-    if (mapped.width > 0 && mapped.height > 0) {
-      const uiRatio = this.uiRoiW / this.uiRoiH;
-      const mappedRatio = mapped.width / mapped.height;
-      if (Math.abs(uiRatio - mappedRatio) > 0.02) {
-        const targetH = Math.round(mapped.width / uiRatio);
-        mapped.height = Math.min(drawH, targetH);
-      }
-    }
 
     const roiW = Math.max(10, Math.floor(mapped.width));
     const roiH = Math.max(60, Math.floor(mapped.height));
     const roiX = clamp(Math.floor(mapped.x), 0, Math.max(0, drawW - roiW));
     const roiY = clamp(Math.floor(mapped.y), 0, Math.max(0, drawH - roiH));
+
 
     const res = await new Promise((resolve, reject) => {
       wx.canvasGetImageData({
@@ -940,59 +1047,42 @@ Page({
   async sendRoiToService(gray, roiW, roiH) {
     let result;
     let latencyMs = 0;
-    if (this.data.useMock) {
-      latencyMs = 24;
-      const mockVariants = [
-        ['cross', 'cross', 'cross', 'cross', 'circle'],
-        ['cross', 'cross', 'cross', 'circle', 'cross'],
-        ['cross', 'circle', 'cross', 'cross', 'cross'],
-        ['circle', 'cross', 'cross', 'cross', 'cross'],
-        ['cross', 'cross', 'cross', 'cross', 'cross'],
-      ];
-      const idx = Number(this.data.mockIndex || 0) % mockVariants.length;
-      result = {
-        slots: mockVariants[idx],
-        confidence: 0.82,
-        latencyMs,
-      };
-    } else {
-      try {
-        const startAt = Date.now();
-        const res = await requestWithTimeout({
-          url: `${OPENCV_BASE_URL}/api/vision/roi`,
-          method: 'POST',
-          data: {
-            imageBase64: wx.arrayBufferToBase64(gray.buffer),
-            roiWidth: roiW,
-            roiHeight: roiH,
-            cannyLow: Number((this.data.tuner && this.data.tuner.cannyLow) || 40),
-            cannyHigh: Number((this.data.tuner && this.data.tuner.cannyHigh) || 120),
-            edgeRatioEmpty: Number((this.data.tuner && this.data.tuner.edgeRatioEmpty) || 0.015),
-            matchThreshold: Number((this.data.tuner && this.data.tuner.matchThreshold) || 0.32),
-            seq: this.data.collected.length + 1,
-            timestamp: Date.now(),
-          },
-          header: {
-            'content-type': 'application/json',
-          },
-        });
-        latencyMs = Date.now() - startAt;
-        result = res && res.data;
-        if (result && result.debug) {
-          const debugText = JSON.stringify(result.debug);
-          console.log('[opencv-debug]', debugText);
-          this.setData({ lastDebugText: debugText });
-        }
-      } catch (err) {
-        this.scanTimeoutCount += 1;
-        if (this.scanTimeoutCount >= 3) {
-          this.scanWeakNetwork = true;
-          this.setData({ scanHint: '网络不稳定，已降低识别频率' });
-        } else if (this.scanTimeoutCount >= 2) {
-          this.setData({ scanHint: '识别中断，请保持对齐再试' });
-        }
-        return;
+    try {
+      const startAt = Date.now();
+      const res = await requestWithTimeout({
+        url: `${OPENCV_BASE_URL}/api/vision/roi`,
+        method: 'POST',
+        data: {
+          imageBase64: wx.arrayBufferToBase64(gray.buffer),
+          roiWidth: roiW,
+          roiHeight: roiH,
+          cannyLow: Number((this.data.tuner && this.data.tuner.cannyLow) || 40),
+          cannyHigh: Number((this.data.tuner && this.data.tuner.cannyHigh) || 120),
+          edgeRatioEmpty: Number((this.data.tuner && this.data.tuner.edgeRatioEmpty) || 0.015),
+          matchThreshold: Number((this.data.tuner && this.data.tuner.matchThreshold) || 0.32),
+          seq: this.data.collected.length + 1,
+          timestamp: Date.now(),
+        },
+        header: {
+          'content-type': 'application/json',
+        },
+      });
+      latencyMs = Date.now() - startAt;
+      result = res && res.data;
+      if (result && result.debug) {
+        const debugText = JSON.stringify(result.debug);
+        console.log('[opencv-debug]', debugText);
+        this.setData({ lastDebugText: debugText });
       }
+    } catch (err) {
+      this.scanTimeoutCount += 1;
+      if (this.scanTimeoutCount >= 3) {
+        this.scanWeakNetwork = true;
+        this.setData({ scanHint: '网络不稳定，已降低识别频率' });
+      } else if (this.scanTimeoutCount >= 2) {
+        this.setData({ scanHint: '识别中断，请保持对齐再试' });
+      }
+      return;
     }
 
     this.scanTimeoutCount = 0;
@@ -1055,14 +1145,16 @@ Page({
   },
 
 
-  async handleWinderFrame(yPlane, width, height, scaleX, scaleY) {
+  async handleWinderFrame(yPlane, width, height, scaleX, scaleY, baseRect) {
     if (this.requestPending || this.data.winderStatus !== 'scan') return;
 
+    const offsetX = baseRect ? baseRect.left : 0;
+    const offsetY = baseRect ? baseRect.top : 0;
     const roiSize = Math.floor(this.windowWidth * 0.52);
     const roiW = Math.max(120, Math.floor(roiSize * scaleX));
     const roiH = roiW;
-    const roiX = clamp(Math.floor((this.windowWidth / 2 - roiSize / 2) * scaleX), 0, Math.max(0, width - roiW));
-    const roiY = clamp(Math.floor((this.windowHeight / 2 - roiSize / 2) * scaleY), 0, Math.max(0, height - roiH));
+    const roiX = clamp(Math.floor((this.windowWidth / 2 - roiSize / 2 - offsetX) * scaleX), 0, Math.max(0, width - roiW));
+    const roiY = clamp(Math.floor((this.windowHeight / 2 - roiSize / 2 - offsetY) * scaleY), 0, Math.max(0, height - roiH));
 
     const roiGray = new Uint8Array(roiW * roiH);
     let k = 0;
@@ -1265,10 +1357,6 @@ Page({
     this.setData({ showTuner: !this.data.showTuner });
   },
 
-  toggleMock() {
-    const next = !this.data.useMock;
-    this.setData({ useMock: next, scanHint: next ? '已启用 Mock 识别' : '已关闭 Mock 识别' });
-  },
 
   adjustTuner(e) {
     const key = e && e.currentTarget && e.currentTarget.dataset && e.currentTarget.dataset.key;

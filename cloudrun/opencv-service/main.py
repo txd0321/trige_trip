@@ -6,8 +6,14 @@ from typing import List
 import cv2
 import numpy as np
 
+# =====================
+# App / 基础依赖
+# =====================
 app = FastAPI()
 
+# =====================
+# API 请求/响应模型
+# =====================
 class RoiRequest(BaseModel):
     imageBase64: str
     roiWidth: int | None = None
@@ -19,13 +25,23 @@ class RoiRequest(BaseModel):
     seq: int | None = None
     timestamp: int | None = None
 
+class ShapeItem(BaseModel):
+    label: str
+    y: float
+    confidence: float | None = None
+
+
 class RoiResponse(BaseModel):
     slots: List[str]
     confidence: float
     latencyMs: int
+    items: List[ShapeItem] | None = None
     debug: dict | None = None
 
 
+# =====================
+# 图像解码与预处理
+# =====================
 def decode_image(image_base64: str, width: int | None, height: int | None) -> np.ndarray:
     data = base64.b64decode(image_base64)
     arr = np.frombuffer(data, dtype=np.uint8)
@@ -44,17 +60,35 @@ def preprocess(gray: np.ndarray) -> np.ndarray:
     return gray
 
 
-def split_segments(img: np.ndarray, segments: int = 5) -> List[np.ndarray]:
-    h = img.shape[0]
-    seg_h = h // segments
-    parts = []
-    for i in range(segments):
-        y0 = i * seg_h
-        y1 = h if i == segments - 1 else (i + 1) * seg_h
-        parts.append(img[y0:y1, :])
-    return parts
+def auto_adjust(gray: np.ndarray) -> np.ndarray:
+    if gray.size == 0:
+        return gray
+    min_val, max_val = np.percentile(gray, (2, 98))
+    if max_val - min_val < 5:
+        return gray
+    scaled = np.clip((gray - min_val) * (255.0 / (max_val - min_val)), 0, 255)
+    return scaled.astype(np.uint8)
 
 
+def adaptive_threshold(gray: np.ndarray) -> np.ndarray:
+    if gray.size == 0:
+        return gray
+    block_size = 21 if min(gray.shape[:2]) >= 21 else 11
+    if block_size % 2 == 0:
+        block_size += 1
+    return cv2.adaptiveThreshold(
+        gray,
+        255,
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY,
+        block_size,
+        5,
+    )
+
+
+# =====================
+# ROI 候选框检测（严格 y 轴识别）
+# =====================
 def find_dynamic_boxes(gray: np.ndarray, segments: int = 5) -> tuple[list[tuple[int, int, int, int]], str]:
     h, w = gray.shape[:2]
     if h == 0 or w == 0:
@@ -97,6 +131,9 @@ def find_dynamic_boxes(gray: np.ndarray, segments: int = 5) -> tuple[list[tuple[
     return boxes, "dynamic"
 
 
+# =====================
+# 模板与几何特征识别
+# =====================
 def normalize_patch(patch: np.ndarray, size: int = 64) -> np.ndarray:
     h, w = patch.shape[:2]
     if h == 0 or w == 0:
@@ -129,16 +166,99 @@ def match_template(patch: np.ndarray, match_threshold: float) -> tuple[str, floa
     return best[0], best[1]
 
 
+def detect_circle(edge: np.ndarray) -> float:
+    h, w = edge.shape[:2]
+    if h == 0 or w == 0:
+        return 0.0
+    blur = cv2.GaussianBlur(edge, (5, 5), 0)
+    min_radius = max(6, int(min(h, w) * 0.18))
+    max_radius = max(min_radius + 2, int(min(h, w) * 0.45))
+    circles = cv2.HoughCircles(
+        blur,
+        cv2.HOUGH_GRADIENT,
+        dp=1.2,
+        minDist=min(h, w) * 0.3,
+        param1=100,
+        param2=18,
+        minRadius=min_radius,
+        maxRadius=max_radius,
+    )
+    if circles is None:
+        return 0.0
+    return min(1.0, len(circles[0]) / 2.0 + 0.4)
+
+
+def detect_cross(edge: np.ndarray) -> float:
+    h, w = edge.shape[:2]
+    if h == 0 or w == 0:
+        return 0.0
+    lines = cv2.HoughLinesP(edge, 1, np.pi / 180, threshold=40, minLineLength=min(h, w) * 0.35, maxLineGap=6)
+    if lines is None:
+        return 0.0
+    diag_count = 0
+    for line in lines:
+        x1, y1, x2, y2 = line[0]
+        angle = abs(np.degrees(np.arctan2(y2 - y1, x2 - x1)))
+        angle = angle if angle <= 180 else angle - 180
+        if 20 < angle < 70 or 110 < angle < 160:
+            diag_count += 1
+    if diag_count >= 2:
+        return min(1.0, 0.6 + diag_count * 0.1)
+    return 0.0
+
+
+def contour_shape_score(edge: np.ndarray) -> tuple[float, float]:
+    contours, _ = cv2.findContours(edge, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return 0.0, 0.0
+
+    contours = sorted(contours, key=cv2.contourArea, reverse=True)
+    best = contours[0]
+    area = cv2.contourArea(best)
+    if area <= 0:
+        return 0.0, 0.0
+
+    peri = cv2.arcLength(best, True)
+    if peri <= 0:
+        return 0.0, 0.0
+
+    circularity = 4 * np.pi * area / (peri * peri)
+    circle_score = float(np.clip((circularity - 0.45) / 0.45, 0, 1))
+
+    hull = cv2.convexHull(best)
+    hull_area = cv2.contourArea(hull) if hull is not None else area
+    solidity = float(area / max(hull_area, 1.0))
+    cross_score = float(np.clip((0.85 - solidity) / 0.5, 0, 1))
+
+    return circle_score, cross_score
+
+
 def classify_segment(seg: np.ndarray, canny_low: int, canny_high: int, edge_ratio_empty: float, match_threshold: float) -> tuple[str, float]:
     patch = normalize_patch(seg)
     edge = cv2.Canny(patch, canny_low, canny_high)
     edge_ratio = float(np.count_nonzero(edge)) / float(edge.size)
     if edge_ratio < edge_ratio_empty:
         return "empty", 0.8
+
+    circle_score = detect_circle(edge)
+    cross_score = detect_cross(edge)
+    contour_circle, contour_cross = contour_shape_score(edge)
+
+    circle_score = max(circle_score, contour_circle)
+    cross_score = max(cross_score, contour_cross)
+
+    if circle_score >= 0.7 or cross_score >= 0.7:
+        if circle_score >= cross_score:
+            return "circle", circle_score
+        return "cross", cross_score
+
     label, conf = match_template(edge, match_threshold)
     return label, conf
 
 
+# =====================
+# API 接口：ROI 识别
+# =====================
 @app.post("/api/vision/roi", response_model=RoiResponse)
 def detect_roi(payload: RoiRequest):
     start = time.time()
@@ -147,6 +267,8 @@ def detect_roi(payload: RoiRequest):
         return {"slots": ["unknown"] * 5, "confidence": 0.0, "latencyMs": 0}
 
     gray = preprocess(gray)
+    gray = auto_adjust(gray)
+    gray = adaptive_threshold(gray)
 
     h, w = gray.shape[:2]
     if h > 0 and w > 0:
@@ -162,23 +284,25 @@ def detect_roi(payload: RoiRequest):
     match_threshold = float(payload.matchThreshold or 0.32)
 
     boxes, box_mode = find_dynamic_boxes(gray, 5)
-    if boxes:
-        segments = []
-        for (x, y, bw, bh) in boxes:
-            y0 = max(0, y)
-            y1 = min(h, y + bh)
-            x0 = max(0, x)
-            x1 = min(w, x + bw)
-            segments.append(gray[y0:y1, x0:x1])
-    else:
-        segments = split_segments(gray, 5)
+    if not boxes:
+        return {"slots": ["unknown"] * 5, "confidence": 0.0, "latencyMs": 0, "items": [], "debug": {"boxMode": box_mode}}
+
+    segments = []
+    for (x, y, bw, bh) in boxes:
+        y0 = max(0, y)
+        y1 = min(h, y + bh)
+        x0 = max(0, x)
+        x1 = min(w, x + bw)
+        segments.append(gray[y0:y1, x0:x1])
 
     labels = []
     confs = []
     edge_ratios = []
     mean_intensity = []
     match_scores = []
-    for seg in segments:
+    items = []
+
+    for idx, seg in enumerate(segments):
         mean_intensity.append(float(np.mean(seg)) if seg.size else 0.0)
         edge = cv2.Canny(seg, canny_low, canny_high)
         edge_ratio = float(np.count_nonzero(edge)) / float(edge.size or 1)
@@ -187,13 +311,26 @@ def detect_roi(payload: RoiRequest):
             labels.append("empty")
             confs.append(0.2)
             match_scores.append(0.0)
-            continue
+        else:
+            label, conf = classify_segment(seg, canny_low, canny_high, edge_ratio_empty, match_threshold)
+            labels.append(label)
+            confs.append(conf)
+            match_scores.append(conf)
 
-        patch = normalize_patch(edge)
-        label, conf = match_template(patch, match_threshold)
-        labels.append(label)
-        confs.append(conf)
-        match_scores.append(conf)
+        if boxes and idx < len(boxes):
+            x, y, bw, bh = boxes[idx]
+            cy = float(y + bh * 0.5)
+        else:
+            seg_h = h / max(1, len(segments))
+            cy = float((idx + 0.5) * seg_h)
+
+        items.append(
+            {
+                "label": labels[-1],
+                "y": cy,
+                "confidence": float(confs[-1]),
+            }
+        )
 
     confidence = float(sum(confs) / max(1, len(confs)))
     latency_ms = int((time.time() - start) * 1000)
@@ -207,4 +344,4 @@ def detect_roi(payload: RoiRequest):
         "boxMode": box_mode,
         "boxCount": len(boxes),
     }
-    return {"slots": labels, "confidence": confidence, "latencyMs": latency_ms, "debug": debug}
+    return {"slots": labels, "confidence": confidence, "latencyMs": latency_ms, "items": items, "debug": debug}

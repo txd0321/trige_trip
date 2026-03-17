@@ -1,17 +1,7 @@
 <view class="page">
-  <camera class="camera" device-position="back" flash="off" frame-size="small" wx:if="{{step !== 'blow' && step !== 'done'}}">
-    <cover-view
-      class="snapshot-mask {{showTuner ? 'hidden' : ''}}"
-      wx:if="{{step === 'scan' && useSnapshotMode && snapshotMaskReady}}"
-      style="left:0px;top:0px;width:{{windowWidth}}px;height:{{windowHeight}}px;"
-    >
-      <cover-view class="mask-block" style="left:0px;top:0px;width:{{windowWidth}}px;height:{{uiRoiY}}px;"></cover-view>
-      <cover-view class="mask-block" style="left:0px;top:{{uiRoiY}}px;width:{{uiRoiX}}px;height:{{uiRoiH}}px;"></cover-view>
-      <cover-view class="mask-block" style="left:{{uiRoiX + uiRoiW}}px;top:{{uiRoiY}}px;width:{{windowWidth - uiRoiX - uiRoiW}}px;height:{{uiRoiH}}px;"></cover-view>
-      <cover-view class="mask-block" style="left:0px;top:{{uiRoiY + uiRoiH}}px;width:{{windowWidth}}px;height:{{windowHeight - uiRoiY - uiRoiH}}px;"></cover-view>
-      <cover-view class="mask-hole" style="left:{{uiRoiX}}px;top:{{uiRoiY}}px;width:{{uiRoiW}}px;height:{{uiRoiH}}px;"></cover-view>
-    </cover-view>
-  </camera>
+  <view class="camera-wrap" style="left:{{cameraWrapLeft}}px;top:{{cameraWrapTop}}px;width:{{cameraWrapWidth}}px;height:{{cameraWrapHeight}}px;" wx:if="{{step !== 'blow' && step !== 'done'}}">
+    <camera class="camera" device-position="back" flash="off" frame-size="small"></camera>
+  </view>
 
   <view class="candle-bg" wx:if="{{step === 'blow' || step === 'done'}}">
     <image class="candle-image" src="/assets/images/candle.png" mode="aspectFit" />
@@ -24,15 +14,6 @@
     width="{{canvasWidth}}"
     height="{{canvasHeight}}"
     wx:if="{{!showTuner}}"
-  />
-
-
-  <canvas
-    canvas-id="collectCropCanvas"
-    class="collect-crop-canvas"
-    style="width:{{snapshotCanvasWidth}}px;height:{{snapshotCanvasHeight}}px;"
-    width="{{snapshotCanvasWidth}}"
-    height="{{snapshotCanvasHeight}}"
   />
 
   <view class="top-bar">
@@ -53,12 +34,9 @@
 
 
   <cover-view class="tuner-toggle" bindtap="toggleTuner" wx:if="{{step === 'scan'}}">参数调试</cover-view>
+  <cover-view class="freeze-toggle" bindtap="toggleFreezeDetect" wx:if="{{step === 'scan'}}">{{freezeDetect ? '解除冻结' : '冻结当前帧'}}</cover-view>
   <view class="tuner-panel" wx:if="{{step === 'scan' && showTuner}}">
     <scroll-view class="tuner-scroll" scroll-y>
-      <view class="preset-row">
-        <view class="preset-btn" bindtap="takeSnapshot">拍一张识别</view>
-        <view class="preset-btn" bindtap="toggleMock">{{useMock ? '关闭Mock' : '启用Mock'}}</view>
-      </view>
       <view class="tuner-title">识别参数调试</view>
       <view class="preset-row">
         <view class="preset-btn" data-preset="strict" bindtap="applyTunerPreset">严格</view>
@@ -140,34 +118,6 @@
       <view class="tuner-item">
         <view>Debug</view>
         <view class="debug-text">{{lastDebugText}}</view>
-      </view>
-      <view class="tuner-item" wx:if="{{snapshotRoiPreview || snapshotImage}}">
-        <view>拍照预览</view>
-        <view class="roi-preview-grid">
-          <view class="roi-preview-cell">
-            <view class="roi-preview-title">原图</view>
-            <image class="roi-preview-image" src="{{snapshotImage}}" mode="aspectFit" />
-          </view>
-          <view class="roi-preview-cell">
-            <view class="roi-preview-title">ROI</view>
-            <image class="roi-preview-image" src="{{snapshotRoiPreview}}" mode="aspectFit" />
-          </view>
-        </view>
-      </view>
-
-      <view class="tuner-item" wx:if="{{cachedSnapshots.length}}">
-        <view>缓存图片</view>
-        <view class="cache-strip">
-          <image
-            class="cache-thumb"
-            wx:for="{{cachedSnapshots}}"
-            wx:key="*this"
-            data-index="{{index}}"
-            src="{{item}}"
-            mode="aspectFill"
-            bindtap="useCachedSnapshot"
-          />
-        </view>
       </view>
     </scroll-view>
   </view>
