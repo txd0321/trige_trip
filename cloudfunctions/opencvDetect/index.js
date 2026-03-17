@@ -47,9 +47,13 @@ exports.main = async (event) => {
     }
 
     const payload = {
+      imageBase64: event.imageBase64 || event.roiGray,
       roiGray: event.roiGray,
       roiWidth: event.roiWidth,
       roiHeight: event.roiHeight,
+      roi: event.roi,
+      seq: event.seq,
+      timestamp: event.timestamp,
       thresholdHint: event.thresholdHint,
       scene: event.scene || 'ar_scan',
     };

@@ -1,5 +1,17 @@
 <view class="page">
-  <camera class="camera" device-position="back" flash="off" frame-size="small" wx:if="{{step !== 'blow' && step !== 'done'}}" />
+  <camera class="camera" device-position="back" flash="off" frame-size="small" wx:if="{{step !== 'blow' && step !== 'done'}}">
+    <cover-view
+      class="snapshot-mask {{showTuner ? 'hidden' : ''}}"
+      wx:if="{{step === 'scan' && useSnapshotMode && snapshotMaskReady}}"
+      style="left:0px;top:0px;width:{{windowWidth}}px;height:{{windowHeight}}px;"
+    >
+      <cover-view class="mask-block" style="left:0px;top:0px;width:{{windowWidth}}px;height:{{uiRoiY}}px;"></cover-view>
+      <cover-view class="mask-block" style="left:0px;top:{{uiRoiY}}px;width:{{uiRoiX}}px;height:{{uiRoiH}}px;"></cover-view>
+      <cover-view class="mask-block" style="left:{{uiRoiX + uiRoiW}}px;top:{{uiRoiY}}px;width:{{windowWidth - uiRoiX - uiRoiW}}px;height:{{uiRoiH}}px;"></cover-view>
+      <cover-view class="mask-block" style="left:0px;top:{{uiRoiY + uiRoiH}}px;width:{{windowWidth}}px;height:{{windowHeight - uiRoiY - uiRoiH}}px;"></cover-view>
+      <cover-view class="mask-hole" style="left:{{uiRoiX}}px;top:{{uiRoiY}}px;width:{{uiRoiW}}px;height:{{uiRoiH}}px;"></cover-view>
+    </cover-view>
+  </camera>
 
   <view class="candle-bg" wx:if="{{step === 'blow' || step === 'done'}}">
     <image class="candle-image" src="/assets/images/candle.png" mode="aspectFit" />
@@ -11,29 +23,153 @@
     style="width:100vw;height:100vh;"
     width="{{canvasWidth}}"
     height="{{canvasHeight}}"
+    wx:if="{{!showTuner}}"
   />
 
-  <canvas canvas-id="collectCropCanvas" class="collect-crop-canvas" style="width:512px;height:512px;" />
+
+  <canvas
+    canvas-id="collectCropCanvas"
+    class="collect-crop-canvas"
+    style="width:{{snapshotCanvasWidth}}px;height:{{snapshotCanvasHeight}}px;"
+    width="{{snapshotCanvasWidth}}"
+    height="{{snapshotCanvasHeight}}"
+  />
 
   <view class="top-bar">
     <view class="top-back" bindtap="goHome">返回</view>
     <view class="top-title">XR互动</view>
   </view>
 
-  <view class="status-text" wx:if="{{step === 'scan'}}">{{scanPattern}}</view>
+  <view class="status-text {{scanState === 'cooldown' ? 'cooldown' : ''}}" wx:if="{{step === 'scan'}}">{{scanPattern}}</view>
   <view class="status-hint" wx:if="{{step === 'scan' && scanHint}}">{{scanHint}}</view>
+  <view class="status-success" wx:if="{{step === 'scan' && scanState === 'matched'}}">识别成功</view>
 
-  <view class="scan-frame" wx:if="{{step === 'scan' && scanState !== 'completed'}}">
-    <view class="h-divider" style="top:20%;"></view>
-    <view class="h-divider" style="top:40%;"></view>
-    <view class="h-divider" style="top:60%;"></view>
-    <view class="h-divider" style="top:80%;"></view>
-    <view class="h-divider" style="top:calc(100% - 4rpx);"></view>
-  </view>
+  <view class="scan-frame {{scanState}}" wx:if="{{step === 'scan' && scanState !== 'completed'}}"></view>
 
   <view class="progress" wx:if="{{step === 'scan'}}">
     <text>{{collected.length}} / 13 已收集</text>
     <progress percent="{{percent}}" active stroke-width="6" activeColor="#FF7A23" />
+  </view>
+
+
+  <cover-view class="tuner-toggle" bindtap="toggleTuner" wx:if="{{step === 'scan'}}">参数调试</cover-view>
+  <view class="tuner-panel" wx:if="{{step === 'scan' && showTuner}}">
+    <scroll-view class="tuner-scroll" scroll-y>
+      <view class="preset-row">
+        <view class="preset-btn" bindtap="takeSnapshot">拍一张识别</view>
+        <view class="preset-btn" bindtap="toggleMock">{{useMock ? '关闭Mock' : '启用Mock'}}</view>
+      </view>
+      <view class="tuner-title">识别参数调试</view>
+      <view class="preset-row">
+        <view class="preset-btn" data-preset="strict" bindtap="applyTunerPreset">严格</view>
+        <view class="preset-btn" data-preset="balanced" bindtap="applyTunerPreset">平衡</view>
+        <view class="preset-btn" data-preset="loose" bindtap="applyTunerPreset">宽松</view>
+      </view>
+      <view class="tuner-item">
+        <view>单帧阈值(frameMinConf)</view>
+        <view class="tuner-stepper">
+          <view class="step-btn" data-key="frameMinConf" data-delta="-0.02" bindtap="adjustTuner">-</view>
+          <view class="step-value">{{tuner.frameMinConf}}</view>
+          <view class="step-btn" data-key="frameMinConf" data-delta="0.02" bindtap="adjustTuner">+</view>
+        </view>
+      </view>
+      <view class="tuner-item">
+        <view>稳定阈值(stableMinAvgConf)</view>
+        <view class="tuner-stepper">
+          <view class="step-btn" data-key="stableMinAvgConf" data-delta="-0.02" bindtap="adjustTuner">-</view>
+          <view class="step-value">{{tuner.stableMinAvgConf}}</view>
+          <view class="step-btn" data-key="stableMinAvgConf" data-delta="0.02" bindtap="adjustTuner">+</view>
+        </view>
+      </view>
+      <view class="tuner-item">
+        <view>请求间隔(ms)</view>
+        <view class="tuner-stepper">
+          <view class="step-btn" data-key="requestInterval" data-delta="-10" bindtap="adjustTuner">-</view>
+          <view class="step-value">{{tuner.requestInterval}}</view>
+          <view class="step-btn" data-key="requestInterval" data-delta="10" bindtap="adjustTuner">+</view>
+        </view>
+      </view>
+      <view class="tuner-item">
+        <view>弱网间隔(ms)</view>
+        <view class="tuner-stepper">
+          <view class="step-btn" data-key="requestIntervalWeak" data-delta="-20" bindtap="adjustTuner">-</view>
+          <view class="step-value">{{tuner.requestIntervalWeak}}</view>
+          <view class="step-btn" data-key="requestIntervalWeak" data-delta="20" bindtap="adjustTuner">+</view>
+        </view>
+      </view>
+      <view class="tuner-item">
+        <view>Canny Low</view>
+        <view class="tuner-stepper">
+          <view class="step-btn" data-key="cannyLow" data-delta="-5" bindtap="adjustTuner">-</view>
+          <view class="step-value">{{tuner.cannyLow}}</view>
+          <view class="step-btn" data-key="cannyLow" data-delta="5" bindtap="adjustTuner">+</view>
+        </view>
+      </view>
+      <view class="tuner-item">
+        <view>Canny High</view>
+        <view class="tuner-stepper">
+          <view class="step-btn" data-key="cannyHigh" data-delta="-10" bindtap="adjustTuner">-</view>
+          <view class="step-value">{{tuner.cannyHigh}}</view>
+          <view class="step-btn" data-key="cannyHigh" data-delta="10" bindtap="adjustTuner">+</view>
+        </view>
+      </view>
+      <view class="tuner-item">
+        <view>空白阈值(edgeRatio)</view>
+        <view class="tuner-stepper">
+          <view class="step-btn" data-key="edgeRatioEmpty" data-delta="-0.002" bindtap="adjustTuner">-</view>
+          <view class="step-value">{{tuner.edgeRatioEmpty}}</view>
+          <view class="step-btn" data-key="edgeRatioEmpty" data-delta="0.002" bindtap="adjustTuner">+</view>
+        </view>
+      </view>
+      <view class="tuner-item">
+        <view>模板阈值(match)</view>
+        <view class="tuner-stepper">
+          <view class="step-btn" data-key="matchThreshold" data-delta="-0.02" bindtap="adjustTuner">-</view>
+          <view class="step-value">{{tuner.matchThreshold}}</view>
+          <view class="step-btn" data-key="matchThreshold" data-delta="0.02" bindtap="adjustTuner">+</view>
+        </view>
+      </view>
+
+      <view class="tuner-title">识别统计</view>
+      <view class="tuner-item"><view>总帧</view><view>{{tunerStats.total || 0}}</view></view>
+      <view class="tuner-item"><view>circle</view><view>{{tunerStats.circle || 0}}</view></view>
+      <view class="tuner-item"><view>cross</view><view>{{tunerStats.cross || 0}}</view></view>
+      <view class="tuner-item"><view>empty</view><view>{{tunerStats.empty || 0}}</view></view>
+      <view class="tuner-item"><view>unknown</view><view>{{tunerStats.unknown || 0}}</view></view>
+      <view class="tuner-item"><view>平均耗时(ms)</view><view>{{tunerStats.avgLatency ? tunerStats.avgLatency.toFixed(0) : 0}}</view></view>
+      <view class="tuner-item">
+        <view>Debug</view>
+        <view class="debug-text">{{lastDebugText}}</view>
+      </view>
+      <view class="tuner-item" wx:if="{{snapshotRoiPreview || snapshotImage}}">
+        <view>拍照预览</view>
+        <view class="roi-preview-grid">
+          <view class="roi-preview-cell">
+            <view class="roi-preview-title">原图</view>
+            <image class="roi-preview-image" src="{{snapshotImage}}" mode="aspectFit" />
+          </view>
+          <view class="roi-preview-cell">
+            <view class="roi-preview-title">ROI</view>
+            <image class="roi-preview-image" src="{{snapshotRoiPreview}}" mode="aspectFit" />
+          </view>
+        </view>
+      </view>
+
+      <view class="tuner-item" wx:if="{{cachedSnapshots.length}}">
+        <view>缓存图片</view>
+        <view class="cache-strip">
+          <image
+            class="cache-thumb"
+            wx:for="{{cachedSnapshots}}"
+            wx:key="*this"
+            data-index="{{index}}"
+            src="{{item}}"
+            mode="aspectFill"
+            bindtap="useCachedSnapshot"
+          />
+        </view>
+      </view>
+    </scroll-view>
   </view>
 
   <view class="winder-stage" wx:if="{{step === 'winder'}}" bindtouchstart="onWinderRotateStart" bindtouchmove="onWinderRotateMove" bindtouchend="onWinderRotateEnd">

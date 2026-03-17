@@ -24,23 +24,23 @@
     "miniprogram": {
       "list": [
         {
-          "name": "pages/ar/index",
-          "pathName": "pages/ar/index",
+          "name": "pages/xr-interaction/index",
+          "pathName": "pages/xr-interaction/index",
           "query": "",
           "scene": null,
           "launchMode": "default"
         },
         {
-          "name": "pages/card/detail",
-          "pathName": "pages/card/detail",
-          "query": "cupId=CUP_001",
+          "name": "pages/ar/index",
+          "pathName": "pages/ar/index",
+          "query": "",
           "launchMode": "default",
           "scene": null
         },
         {
-          "name": "pages/ar/index",
-          "pathName": "pages/ar/index",
-          "query": "",
+          "name": "pages/card/detail",
+          "pathName": "pages/card/detail",
+          "query": "cupId=CUP_001",
           "launchMode": "default",
           "scene": null
         },

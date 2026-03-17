@@ -20,6 +20,8 @@ const REQUEST_TIMEOUT_MS = 1200;
 const COOLDOWN_MS = 2000;
 const MATCHED_MS = 800;
 
+const OPENCV_BASE_URL = 'https://opencv-service-234509-7-1327655007.sh.run.tcloudbase.com';
+
 const FRAME_MIN_CONF = 0.65;
 const STABLE_MIN_AVG_CONF = 0.82;
 const VOTE_WINDOW = 5;
@@ -32,9 +34,39 @@ function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
 }
 
-function callFunctionWithTimeout(name, data, timeout = REQUEST_TIMEOUT_MS) {
+function mapUiRectToImage(uiRect, uiSize, imgSize) {
+  const uiAspect = uiSize.width / uiSize.height;
+  const imgAspect = imgSize.width / imgSize.height;
+
+  let scale = 1;
+  let offsetX = 0;
+  let offsetY = 0;
+
+  if (imgAspect > uiAspect) {
+    scale = imgSize.height / uiSize.height;
+    offsetX = (imgSize.width - uiSize.width * scale) / 2;
+  } else {
+    scale = imgSize.width / uiSize.width;
+    offsetY = (imgSize.height - uiSize.height * scale) / 2;
+  }
+
+  return {
+    x: Math.round(uiRect.x * scale + offsetX),
+    y: Math.round(uiRect.y * scale + offsetY),
+    width: Math.round(uiRect.width * scale),
+    height: Math.round(uiRect.height * scale),
+  };
+}
+
+function requestWithTimeout(options, timeout = REQUEST_TIMEOUT_MS) {
   return Promise.race([
-    wx.cloud.callFunction({ name, data }),
+    new Promise((resolve, reject) => {
+      wx.request({
+        ...options,
+        success: (res) => resolve(res),
+        fail: (err) => reject(err),
+      });
+    }),
     new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), timeout)),
   ]);
 }
@@ -71,15 +103,62 @@ Page({
     showAchievement: false,
     canvasWidth: 0,
     canvasHeight: 0,
+    showTuner: false,
+    tuner: {
+      frameMinConf: FRAME_MIN_CONF,
+      stableMinAvgConf: STABLE_MIN_AVG_CONF,
+      requestInterval: REQUEST_INTERVAL_MS,
+      requestIntervalWeak: REQUEST_INTERVAL_WEAK_MS,
+      cannyLow: 40,
+      cannyHigh: 120,
+      edgeRatioEmpty: 0.015,
+      matchThreshold: 0.32,
+    },
+    tunerStats: {
+      total: 0,
+      empty: 0,
+      circle: 0,
+      cross: 0,
+      unknown: 0,
+      avgLatency: 0,
+    },
+    lastDebugText: '',
+    useSnapshotMode: true,
+    snapshotImage: '',
+    snapshotRoiPreview: '',
+    snapshotRoiRaw: '',
+    snapshotCanvasWidth: 512,
+    cachedSnapshots: [],
+    useMock: false,
+    mockIndex: 0,
+    snapshotCanvasHeight: 512,
+    snapshotMaskReady: true,
+    snapshotMaskLeft: 0,
+    snapshotMaskTop: 0,
+    snapshotMaskWidth: 0,
+    snapshotMaskHeight: 0,
+    snapshotMaskDebug: '',
+    uiRoiX: 0,
+    uiRoiY: 0,
+    uiRoiW: 0,
+    uiRoiH: 0,
+    maskSafeTop: 0,
+    maskTopHeight: 0,
   },
 
   onLoad(options) {
     if (options.cupId) this.cupId = options.cupId;
+    const savedTuner = wx.getStorageSync('xr_tuner');
+    if (savedTuner) {
+      this.setData({ tuner: { ...this.data.tuner, ...savedTuner } });
+    }
   },
 
   onReady() {
     this.camCtx = wx.createCameraContext();
     this.overlayCtx = wx.createCanvasContext('overlay', this);
+    this.overlayCtx.setTextAlign('center');
+    this.overlayCtx.setTextBaseline('middle');
 
     const sysInfo = wx.getSystemInfoSync();
     this.windowWidth = sysInfo.windowWidth;
@@ -88,12 +167,64 @@ Page({
     this.setData({
       canvasWidth: this.windowWidth,
       canvasHeight: this.windowHeight,
+      windowWidth: this.windowWidth,
+      windowHeight: this.windowHeight,
     });
 
-    this.uiRoiW = Math.floor((100 * this.windowWidth) / 750);
-    this.uiRoiH = Math.floor((700 * this.windowWidth) / 750);
+    this.uiRoiW = Math.floor((140 * this.windowWidth) / 750);
+    this.uiRoiH = Math.floor((760 * this.windowWidth) / 750);
     this.uiRoiX = Math.floor(this.windowWidth / 2 - this.uiRoiW / 2);
     this.uiRoiY = Math.floor(this.windowHeight / 2 - this.uiRoiH / 2);
+
+    const safeTop = Math.max(0, sysInfo.statusBarHeight || 0);
+    const topOverlayRpx = 300;
+    const topOverlayPx = Math.floor((topOverlayRpx * this.windowWidth) / 750);
+    const maskSafeTop = Math.max(safeTop, topOverlayPx);
+    const maskTopHeight = Math.max(0, this.uiRoiY - maskSafeTop);
+
+    this.setData({
+      uiRoiW: this.uiRoiW,
+      uiRoiH: this.uiRoiH,
+      uiRoiX: this.uiRoiX,
+      uiRoiY: this.uiRoiY,
+      maskSafeTop: maskSafeTop,
+      maskTopHeight: maskTopHeight,
+    });
+
+    const fallback = { left: 0, top: 0, width: this.windowWidth, height: this.windowHeight };
+    this.cameraRect = fallback;
+    this.setData({
+      snapshotMaskLeft: fallback.left,
+      snapshotMaskTop: fallback.top,
+      snapshotMaskWidth: fallback.width,
+      snapshotMaskHeight: fallback.height,
+      snapshotMaskReady: true,
+      snapshotMaskDebug: `fallback:${fallback.width}x${fallback.height}`,
+    });
+
+    setTimeout(() => {
+      wx.createSelectorQuery()
+        .in(this)
+        .select('.camera')
+        .boundingClientRect((rect) => {
+          if (!rect) return;
+          this.cameraRect = rect;
+          this.roiRectOnCamera = {
+            x: this.uiRoiX - rect.left,
+            y: this.uiRoiY - rect.top,
+            width: this.uiRoiW,
+            height: this.uiRoiH,
+          };
+          this.setData({
+            snapshotMaskLeft: rect.left,
+            snapshotMaskTop: rect.top,
+            snapshotMaskWidth: rect.width,
+            snapshotMaskHeight: rect.height,
+            snapshotMaskDebug: `rect:${Math.round(rect.width)}x${Math.round(rect.height)}`,
+          });
+        })
+        .exec();
+    }, 200);
 
     this.winderCenter = {
       x: this.windowWidth / 2,
@@ -117,8 +248,12 @@ Page({
     this.blowRmsBuffer = [];
     this.blowAboveStart = 0;
 
-    this.listener = this.camCtx.onCameraFrame(this.handleFrame.bind(this));
-    this.listener.start();
+    if (!this.data.useSnapshotMode) {
+      this.listener = this.camCtx.onCameraFrame(this.handleFrame.bind(this));
+      this.listener.start();
+    } else {
+      this.listener = null;
+    }
   },
 
   onHide() {
@@ -141,6 +276,7 @@ Page({
     if (this.winderGuideTimer) clearTimeout(this.winderGuideTimer);
     if (this.blowIntroTimer) clearTimeout(this.blowIntroTimer);
     if (this.blowTimeoutTimer) clearTimeout(this.blowTimeoutTimer);
+    if (this.snapshotTimer) clearTimeout(this.snapshotTimer);
     this.stopRecorder();
   },
 
@@ -268,7 +404,7 @@ Page({
     }));
   },
 
-  drawOverlay(boxes, labels, scaleX, scaleY) {
+  drawOverlay(boxes, labels, scaleX, scaleY, offsetX = 0, offsetY = 0) {
     const ctx = this.overlayCtx;
     ctx.clearRect(0, 0, this.windowWidth, this.windowHeight);
 
@@ -293,12 +429,12 @@ Page({
         color = '#ff8a00';
         text = '✕';
       } else if (cls === 'empty') {
-        color = '#ffffff55';
+        color = 'rgba(255,255,255,0.35)';
         text = '—';
       }
 
-      const x = b.x / scaleX;
-      const y = b.y / scaleY;
+      const x = offsetX + b.x / scaleX;
+      const y = offsetY + b.y / scaleY;
       const w = b.w / scaleX;
       const h = b.h / scaleY;
 
@@ -338,18 +474,23 @@ Page({
       }
     });
 
-    if (stableCnt < VOTE_MIN_HIT || stableAvg < this.data.stableMinAvgConf) return { ok: false };
+    const stableMin = Number((this.data.tuner && this.data.tuner.stableMinAvgConf) || this.data.stableMinAvgConf);
+    if (stableCnt < VOTE_MIN_HIT || stableAvg < stableMin) return { ok: false };
     return { ok: true, idx: stableIdx };
   },
 
   async handleFrame(frame) {
+    if (this.data.useSnapshotMode) return;
     const { width, height } = frame;
     if (!width || !height || !frame.data) return;
 
     if (this.data.step !== 'scan' && this.data.step !== 'winder') return;
 
     const now = Date.now();
-    const interval = this.scanWeakNetwork ? REQUEST_INTERVAL_WEAK_MS : REQUEST_INTERVAL_MS;
+    const tuner = this.data.tuner || {};
+    const intervalBase = Number(tuner.requestInterval || REQUEST_INTERVAL_MS);
+    const intervalWeak = Number(tuner.requestIntervalWeak || REQUEST_INTERVAL_WEAK_MS);
+    const interval = this.scanWeakNetwork ? intervalWeak : intervalBase;
     if (now - this.lastRequestAt < interval) return;
     this.lastRequestAt = now;
 
@@ -399,15 +540,31 @@ Page({
     let latencyMs = 0;
     try {
       const startAt = Date.now();
-      const res = await callFunctionWithTimeout('opencvDetect', {
-        roiGray: wx.arrayBufferToBase64(roiGray.buffer),
-        roiWidth: roiW,
-        roiHeight: roiH,
-        thresholdHint: threshold,
-        scene: 'ar_scan',
+      const res = await requestWithTimeout({
+        url: `${OPENCV_BASE_URL}/api/vision/roi`,
+        method: 'POST',
+        data: {
+          imageBase64: wx.arrayBufferToBase64(roiGray.buffer),
+          roiWidth: roiW,
+          roiHeight: roiH,
+          cannyLow: Number((this.data.tuner && this.data.tuner.cannyLow) || 40),
+          cannyHigh: Number((this.data.tuner && this.data.tuner.cannyHigh) || 120),
+          edgeRatioEmpty: Number((this.data.tuner && this.data.tuner.edgeRatioEmpty) || 0.015),
+          matchThreshold: Number((this.data.tuner && this.data.tuner.matchThreshold) || 0.32),
+          seq: this.data.collected.length + 1,
+          timestamp: Date.now(),
+        },
+        header: {
+          'content-type': 'application/json',
+        },
       });
       latencyMs = Date.now() - startAt;
-      result = res && res.result && res.result.result;
+      result = res && res.data;
+      if (result && result.debug) {
+        const debugText = JSON.stringify(result.debug);
+        console.log('[opencv-debug]', debugText);
+        this.setData({ lastDebugText: debugText });
+      }
     } catch (err) {
       this.scanTimeoutCount += 1;
       if (this.scanTimeoutCount >= 3) {
@@ -421,15 +578,27 @@ Page({
     }
 
     this.requestPending = false;
+    this.scanTimeoutCount = 0;
     if (!result || !Array.isArray(result.slots)) return;
 
     const labels = result.slots.slice(0, SEGMENTS);
-    const confs = Array.isArray(result.confidences) ? result.confidences.slice(0, SEGMENTS) : [];
-    const safeLabels = labels.map((label, i) => {
-      const conf = Number(confs[i] || 0);
-      if (!label || label === 'unknown' || conf < this.data.frameMinConf) return 'unknown';
+    const safeLabels = labels.map((label) => {
+      if (!label) return 'unknown';
       return label;
     });
+    const frameMinConf = Number((this.data.tuner && this.data.tuner.frameMinConf) || this.data.frameMinConf);
+    const confs = new Array(SEGMENTS).fill(Number(result.confidence || 0));
+
+    const tunerStats = this.data.tunerStats || {};
+    const countMap = { ...tunerStats };
+    countMap.total = (countMap.total || 0) + 1;
+    labels.forEach((label) => {
+      const key = label || 'unknown';
+      countMap[key] = (countMap[key] || 0) + 1;
+    });
+    const prevAvg = Number(countMap.avgLatency || 0);
+    countMap.avgLatency = prevAvg ? (prevAvg * 0.9 + latencyMs * 0.1) : latencyMs;
+    this.setData({ tunerStats: countMap });
 
     const patternSymbols = safeLabels.map((c) => (c === 'circle' ? '●' : c === 'cross' ? '❌' : c === 'empty' ? '—' : '?'));
     const patternStr = patternSymbols.join(' ');
@@ -454,7 +623,7 @@ Page({
       }
     }
     if (circleIdx === null) score = score / SEGMENTS;
-    if (score < this.data.frameMinConf) return;
+    if (score < frameMinConf) return;
 
     const stable = this.pushVoteAndGetStable(circleIdx, score);
     if (!stable.ok) return;
@@ -468,11 +637,21 @@ Page({
     this.handleScanSuccess(stepIdx, latencyMs, score, stable.idx);
   },
 
-  handleScanSuccess(stepIdx) {
+  handleScanSuccess(stepIdx, latencyMs, confidence, circleIdx) {
     const collected = this.data.collected.concat(stepIdx);
     const percent = (collected.length / TOTAL_COUNT) * 100;
     const expectedIdx = CIRCLE_IDX_SEQ[stepIdx];
     const noteName = STEP_NOTE_NAME[stepIdx];
+
+    this.trackScanEvent({
+      targetIndex: stepIdx + 1,
+      pattern: this.data.scanPattern,
+      confidence,
+      latencyMs,
+      retryCount: this.scanTimeoutCount,
+      note: noteName,
+      circleIdx,
+    });
 
     if (expectedIdx !== null) {
       const note = ROI_SEG_NOTE[expectedIdx];
@@ -491,7 +670,7 @@ Page({
       this.setData({ scanState: 'completed' });
       this.scanTimer = setTimeout(() => {
         this.enterWinderStep();
-      }, 1200);
+      }, COOLDOWN_MS);
       return;
     }
 
@@ -514,6 +693,367 @@ Page({
     this.winderAlignStart = Date.now();
     this.winderTimeoutCount = 0;
   },
+
+
+  async takeSnapshot(isAuto = false) {
+    if (this.data.step !== 'scan' || !this.camCtx || this.requestPending) return;
+    this.requestPending = true;
+    if (!isAuto) this.setData({ scanHint: '拍照中…' });
+    try {
+      const res = await new Promise((resolve, reject) => {
+        this.camCtx.takePhoto({
+          quality: 'high',
+          success: resolve,
+          fail: reject,
+        });
+      });
+      if (!res || !res.tempImagePath) {
+        if (!isAuto) this.setData({ scanHint: '拍照失败，请重试' });
+        this.requestPending = false;
+        return;
+      }
+      this.setData({ snapshotImage: res.tempImagePath, scanHint: '' });
+      this.cacheSnapshot(res.tempImagePath);
+      await this.processSnapshot(res.tempImagePath);
+    } catch (err) {
+      if (!isAuto) this.setData({ scanHint: '拍照失败，请重试' });
+      this.requestPending = false;
+    }
+  },
+
+  cacheSnapshot(path) {
+    const maxKeep = 6;
+    const list = Array.isArray(this.data.cachedSnapshots) ? [...this.data.cachedSnapshots] : [];
+    const next = [path, ...list.filter((item) => item !== path)].slice(0, maxKeep);
+    this.setData({ cachedSnapshots: next, mockIndex: 0 });
+  },
+
+  async useCachedSnapshot(e) {
+    if (this.data.requestPending) return;
+    const index = Number((e && e.currentTarget && e.currentTarget.dataset && e.currentTarget.dataset.index) || 0);
+    const list = this.data.cachedSnapshots || [];
+    const target = list[index];
+    if (!target) return;
+    this.requestPending = true;
+    this.setData({ snapshotImage: target, mockIndex: index, scanHint: '使用缓存图片…' });
+    await this.processSnapshot(target);
+  },
+
+  async processSnapshotFrame(frame) {
+    const { width, height } = frame;
+    const yPlane = new Uint8Array(frame.data);
+    const scaleX = width / this.windowWidth;
+    const scaleY = height / this.windowHeight;
+    const roiW = Math.max(10, Math.floor(this.uiRoiW * scaleX));
+    const roiH = Math.max(60, Math.floor(this.uiRoiH * scaleY));
+    const roiX = clamp(Math.floor(this.uiRoiX * scaleX), 0, Math.max(0, width - roiW));
+    const roiY = clamp(Math.floor(this.uiRoiY * scaleY), 0, Math.max(0, height - roiH));
+
+    const roiGray = new Uint8Array(roiW * roiH);
+    let k = 0;
+    for (let y = 0; y < roiH; y++) {
+      const srcY = roiY + y;
+      const rowOffset = srcY * width + roiX;
+      for (let x = 0; x < roiW; x++) {
+        roiGray[k++] = yPlane[rowOffset + x];
+      }
+    }
+
+    await this.sendRoiToService(roiGray, roiW, roiH);
+    this.requestPending = false;
+  },
+
+  async processSnapshot(tempPath) {
+    const img = await new Promise((resolve, reject) => {
+      wx.getImageInfo({
+        src: tempPath,
+        success: resolve,
+        fail: reject,
+      });
+    });
+    const canvasId = 'collectCropCanvas';
+    const ctx = wx.createCanvasContext(canvasId, this);
+
+    const orientation = img.orientation || 'up';
+    let drawW = img.width;
+    let drawH = img.height;
+    let rotate = 0;
+    if (orientation === 'right') {
+      drawW = img.height;
+      drawH = img.width;
+      rotate = 90;
+    } else if (orientation === 'left') {
+      drawW = img.height;
+      drawH = img.width;
+      rotate = -90;
+    } else if (orientation === 'down') {
+      rotate = 180;
+    }
+
+    if (drawW && drawH) {
+      this.setData({ snapshotCanvasWidth: drawW, snapshotCanvasHeight: drawH });
+    }
+    ctx.clearRect(0, 0, drawW, drawH);
+    ctx.save();
+    ctx.translate(drawW / 2, drawH / 2);
+    ctx.rotate((rotate * Math.PI) / 180);
+    ctx.drawImage(tempPath, -img.width / 2, -img.height / 2, img.width, img.height);
+    ctx.restore();
+    await new Promise((resolve) => ctx.draw(false, resolve));
+
+    const mapped = mapUiRectToImage(
+      {
+        x: this.uiRoiX,
+        y: this.uiRoiY,
+        width: this.uiRoiW,
+        height: this.uiRoiH,
+      },
+      { width: this.windowWidth, height: this.windowHeight },
+      { width: drawW, height: drawH }
+    );
+
+    if (mapped.width > 0 && mapped.height > 0) {
+      const uiRatio = this.uiRoiW / this.uiRoiH;
+      const mappedRatio = mapped.width / mapped.height;
+      if (Math.abs(uiRatio - mappedRatio) > 0.02) {
+        const targetH = Math.round(mapped.width / uiRatio);
+        mapped.height = Math.min(drawH, targetH);
+      }
+    }
+
+    const roiW = Math.max(10, Math.floor(mapped.width));
+    const roiH = Math.max(60, Math.floor(mapped.height));
+    const roiX = clamp(Math.floor(mapped.x), 0, Math.max(0, drawW - roiW));
+    const roiY = clamp(Math.floor(mapped.y), 0, Math.max(0, drawH - roiH));
+
+    const res = await new Promise((resolve, reject) => {
+      wx.canvasGetImageData({
+        canvasId,
+        x: roiX,
+        y: roiY,
+        width: roiW,
+        height: roiH,
+        success: resolve,
+        fail: reject,
+      }, this);
+    });
+
+    const previewPath = await new Promise((resolve) => {
+      wx.canvasToTempFilePath({
+        canvasId,
+        x: roiX,
+        y: roiY,
+        width: roiW,
+        height: roiH,
+        destWidth: roiW,
+        destHeight: roiH,
+        success: (r) => resolve(r.tempFilePath),
+        fail: () => resolve(''),
+      }, this);
+    });
+    if (previewPath) {
+      this.setData({ snapshotRoiRaw: previewPath });
+    }
+
+    const rgba = res.data || new Uint8ClampedArray();
+    const gray = new Uint8Array(roiW * roiH);
+    for (let i = 0; i < roiW * roiH; i++) {
+      const r = rgba[i * 4];
+      const g = rgba[i * 4 + 1];
+      const b = rgba[i * 4 + 2];
+      gray[i] = (r * 0.299 + g * 0.587 + b * 0.114) | 0;
+    }
+
+    await this.sendRoiToService(gray, roiW, roiH);
+    this.requestPending = false;
+  },
+
+  async drawRoiPreviewWithLabels(labels) {
+    const roiPath = this.data.snapshotRoiRaw || this.data.snapshotRoiPreview;
+    if (!roiPath || !labels) return;
+
+    const canvasId = 'collectCropCanvas';
+    const ctx = wx.createCanvasContext(canvasId, this);
+
+    const img = await new Promise((resolve) => {
+      wx.getImageInfo({
+        src: roiPath,
+        success: resolve,
+        fail: () => resolve(null),
+      });
+    });
+    if (!img) return;
+
+    const drawW = img.width;
+    const drawH = img.height;
+    this.setData({ snapshotCanvasWidth: drawW, snapshotCanvasHeight: drawH });
+
+    ctx.clearRect(0, 0, drawW, drawH);
+    ctx.drawImage(roiPath, 0, 0, drawW, drawH);
+
+    const segH = drawH / SEGMENTS;
+    for (let i = 0; i < SEGMENTS; i++) {
+      const cls = labels[i] || 'unknown';
+      let color = 'rgba(255,255,255,0.45)';
+      let text = '?';
+      if (cls === 'circle') {
+        color = '#00d26a';
+        text = '●';
+      } else if (cls === 'cross') {
+        color = '#ff8a00';
+        text = '✕';
+      } else if (cls === 'empty') {
+        color = 'rgba(255,255,255,0.35)';
+        text = '—';
+      }
+
+      const y = i * segH;
+      ctx.setStrokeStyle(color);
+      ctx.setLineWidth(3);
+      ctx.strokeRect(0, y, drawW, segH);
+      ctx.setFillStyle(color);
+      ctx.setFontSize(24);
+      ctx.fillText(text, drawW / 2 - 6, y + segH / 2 + 6);
+    }
+
+    await new Promise((resolve) => ctx.draw(false, resolve));
+
+    const previewPath = await new Promise((resolve) => {
+      wx.canvasToTempFilePath({
+        canvasId,
+        x: 0,
+        y: 0,
+        width: drawW,
+        height: drawH,
+        destWidth: drawW,
+        destHeight: drawH,
+        success: (r) => resolve(r.tempFilePath),
+        fail: () => resolve(''),
+      }, this);
+    });
+
+    if (previewPath) {
+      this.setData({ snapshotRoiPreview: previewPath });
+    }
+  },
+
+  async sendRoiToService(gray, roiW, roiH) {
+    let result;
+    let latencyMs = 0;
+    if (this.data.useMock) {
+      latencyMs = 24;
+      const mockVariants = [
+        ['cross', 'cross', 'cross', 'cross', 'circle'],
+        ['cross', 'cross', 'cross', 'circle', 'cross'],
+        ['cross', 'circle', 'cross', 'cross', 'cross'],
+        ['circle', 'cross', 'cross', 'cross', 'cross'],
+        ['cross', 'cross', 'cross', 'cross', 'cross'],
+      ];
+      const idx = Number(this.data.mockIndex || 0) % mockVariants.length;
+      result = {
+        slots: mockVariants[idx],
+        confidence: 0.82,
+        latencyMs,
+      };
+    } else {
+      try {
+        const startAt = Date.now();
+        const res = await requestWithTimeout({
+          url: `${OPENCV_BASE_URL}/api/vision/roi`,
+          method: 'POST',
+          data: {
+            imageBase64: wx.arrayBufferToBase64(gray.buffer),
+            roiWidth: roiW,
+            roiHeight: roiH,
+            cannyLow: Number((this.data.tuner && this.data.tuner.cannyLow) || 40),
+            cannyHigh: Number((this.data.tuner && this.data.tuner.cannyHigh) || 120),
+            edgeRatioEmpty: Number((this.data.tuner && this.data.tuner.edgeRatioEmpty) || 0.015),
+            matchThreshold: Number((this.data.tuner && this.data.tuner.matchThreshold) || 0.32),
+            seq: this.data.collected.length + 1,
+            timestamp: Date.now(),
+          },
+          header: {
+            'content-type': 'application/json',
+          },
+        });
+        latencyMs = Date.now() - startAt;
+        result = res && res.data;
+        if (result && result.debug) {
+          const debugText = JSON.stringify(result.debug);
+          console.log('[opencv-debug]', debugText);
+          this.setData({ lastDebugText: debugText });
+        }
+      } catch (err) {
+        this.scanTimeoutCount += 1;
+        if (this.scanTimeoutCount >= 3) {
+          this.scanWeakNetwork = true;
+          this.setData({ scanHint: '网络不稳定，已降低识别频率' });
+        } else if (this.scanTimeoutCount >= 2) {
+          this.setData({ scanHint: '识别中断，请保持对齐再试' });
+        }
+        return;
+      }
+    }
+
+    this.scanTimeoutCount = 0;
+    if (!result || !Array.isArray(result.slots)) return;
+
+    const labels = result.slots.slice(0, SEGMENTS);
+    const safeLabels = labels.map((label) => {
+      if (!label) return 'unknown';
+      return label;
+    });
+    const frameMinConf = Number((this.data.tuner && this.data.tuner.frameMinConf) || this.data.frameMinConf);
+    const confs = new Array(SEGMENTS).fill(Number(result.confidence || 0));
+
+    const tunerStats = this.data.tunerStats || {};
+    const countMap = { ...tunerStats };
+    countMap.total = (countMap.total || 0) + 1;
+    labels.forEach((label) => {
+      const key = label || 'unknown';
+      countMap[key] = (countMap[key] || 0) + 1;
+    });
+    const prevAvg = Number(countMap.avgLatency || 0);
+    countMap.avgLatency = prevAvg ? (prevAvg * 0.9 + latencyMs * 0.1) : latencyMs;
+    this.setData({ tunerStats: countMap });
+
+    const patternSymbols = safeLabels.map((c) => (c === 'circle' ? '●' : c === 'cross' ? '❌' : c === 'empty' ? '—' : '?'));
+    const patternStr = patternSymbols.join(' ');
+    if (patternStr !== this.data.scanPattern) this.setData({ scanPattern: patternStr, scanHint: '' });
+
+    await this.drawRoiPreviewWithLabels(safeLabels);
+
+    const circleCount = safeLabels.filter((x) => x === 'circle').length;
+    const unknownCount = safeLabels.filter((x) => x === 'unknown').length;
+    if (unknownCount > 1 || circleCount > 1) return;
+
+    let circleIdx = null;
+    let score = 0;
+    for (let i = 0; i < SEGMENTS; i++) {
+      if (safeLabels[i] === 'circle') {
+        circleIdx = i;
+        score = Number(confs[i] || 0);
+        break;
+      }
+      if (safeLabels[i] === 'cross' || safeLabels[i] === 'empty') {
+        score += Number(confs[i] || 0);
+      }
+    }
+    if (circleIdx === null) score = score / SEGMENTS;
+    if (score < frameMinConf) return;
+
+    const stable = this.pushVoteAndGetStable(circleIdx, score);
+    if (!stable.ok) return;
+
+    const stepIdx = this.data.collected.length;
+    const expectedIdx = CIRCLE_IDX_SEQ[stepIdx];
+    if (stable.idx !== expectedIdx) return;
+
+    this.voteBuffer = [];
+    this.setData({ scanState: 'matched' });
+    this.handleScanSuccess(stepIdx, latencyMs, score, stable.idx);
+  },
+
 
   async handleWinderFrame(yPlane, width, height, scaleX, scaleY) {
     if (this.requestPending || this.data.winderStatus !== 'scan') return;
@@ -708,6 +1248,102 @@ Page({
     setTimeout(() => {
       this.setData({ step: 'done', blowState: 'done', showAchievement: true });
     }, 2000);
+  },
+
+  trackScanEvent(payload) {
+    if (this.scanTrackTimer) clearTimeout(this.scanTrackTimer);
+    this.scanTrackTimer = setTimeout(() => {
+      try {
+        wx.reportEvent('xr_scan_match', payload);
+      } catch (err) {
+        // ignore
+      }
+    }, 0);
+  },
+
+  toggleTuner() {
+    this.setData({ showTuner: !this.data.showTuner });
+  },
+
+  toggleMock() {
+    const next = !this.data.useMock;
+    this.setData({ useMock: next, scanHint: next ? '已启用 Mock 识别' : '已关闭 Mock 识别' });
+  },
+
+  adjustTuner(e) {
+    const key = e && e.currentTarget && e.currentTarget.dataset && e.currentTarget.dataset.key;
+    const delta = Number(e && e.currentTarget && e.currentTarget.dataset && e.currentTarget.dataset.delta || 0);
+    if (!key || !delta) return;
+
+    const curr = Number((this.data.tuner && this.data.tuner[key]) || 0);
+    let nextValue = curr + delta;
+    if (key === 'frameMinConf' || key === 'stableMinAvgConf' || key === 'matchThreshold') {
+      nextValue = Math.max(0, Math.min(1, Number(nextValue.toFixed(2))));
+    }
+    if (key === 'edgeRatioEmpty') {
+      nextValue = Math.max(0, Number(nextValue.toFixed(3)));
+    }
+    if (key === 'cannyLow') {
+      nextValue = Math.max(0, Math.min(255, Math.round(nextValue)));
+    }
+    if (key === 'cannyHigh') {
+      nextValue = Math.max(1, Math.min(255, Math.round(nextValue)));
+    }
+    if (key === 'requestInterval' || key === 'requestIntervalWeak') {
+      nextValue = Math.max(40, Math.round(nextValue));
+    }
+
+    const next = {
+      ...(this.data.tuner || {}),
+      [key]: nextValue,
+    };
+    this.setData({ tuner: next });
+    wx.setStorageSync('xr_tuner', next);
+  },
+
+  applyTunerPreset(e) {
+    const preset = e && e.currentTarget && e.currentTarget.dataset && e.currentTarget.dataset.preset;
+    if (!preset) return;
+    let next = null;
+    if (preset === 'strict') {
+      next = {
+        ...(this.data.tuner || {}),
+        frameMinConf: 0.7,
+        stableMinAvgConf: 0.86,
+        requestInterval: 180,
+        cannyLow: 60,
+        cannyHigh: 160,
+        edgeRatioEmpty: 0.02,
+        matchThreshold: 0.38,
+      };
+    } else if (preset === 'balanced') {
+      next = {
+        ...(this.data.tuner || {}),
+        frameMinConf: 0.65,
+        stableMinAvgConf: 0.82,
+        requestInterval: 160,
+        cannyLow: 40,
+        cannyHigh: 120,
+        edgeRatioEmpty: 0.015,
+        matchThreshold: 0.32,
+      };
+    } else if (preset === 'loose') {
+      next = {
+        ...(this.data.tuner || {}),
+        frameMinConf: 0.55,
+        stableMinAvgConf: 0.75,
+        requestInterval: 220,
+        cannyLow: 30,
+        cannyHigh: 100,
+        edgeRatioEmpty: 0.012,
+        matchThreshold: 0.28,
+      };
+    }
+
+    if (next) {
+      this.setData({ tuner: next });
+      wx.setStorageSync('xr_tuner', next);
+    }
   },
 
   goHome() {
