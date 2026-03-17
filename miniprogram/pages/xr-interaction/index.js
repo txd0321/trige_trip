@@ -600,7 +600,6 @@ Page({
       return;
     }
 
-    const boxes = this.getFallbackBoxes(roiX, roiY, roiW, roiH);
 
     const roiGray = new Uint8Array(roiW * roiH);
     let k = 0;
@@ -658,42 +657,42 @@ Page({
     this.scanTimeoutCount = 0;
     if (!result) return;
 
+    // ====== 1. 读取后端返回的图形列表（严格 y 轴排序） ======
     const frameMinConf = Number((this.data.tuner && this.data.tuner.frameMinConf) || this.data.frameMinConf);
-    const shapeItems = Array.isArray(result.items) ? result.items : Array.isArray(result.shapes) ? result.shapes : null;
+    const shapeItems = Array.isArray(result.items) ? result.items : null;
 
-    let orderedLabels = [];
-    let orderedShapes = [];
-    let score = 0;
+    if (!shapeItems || !shapeItems.length) return;
 
-    if (shapeItems && shapeItems.length) {
-      const normalized = shapeItems
-        .map((item) => {
-          const label = item.label || item.type || item.cls || item.class || item.shape;
-          const y = Number(item.y ?? item.cy ?? item.centerY ?? item.center_y);
-          const confidence = Number(item.confidence ?? item.score ?? item.prob);
-          return {
-            label: label || 'unknown',
-            y,
-            confidence: Number.isFinite(confidence) ? confidence : null,
-          };
-        })
-        .filter((item) => Number.isFinite(item.y));
+    const normalized = shapeItems
+      .map((item) => {
+        const label = item.label || item.type || item.cls || item.class || item.shape;
+        const y = Number(item.y ?? item.cy ?? item.centerY ?? item.center_y);
+        const x = Number(item.x ?? item.cx ?? item.centerX ?? item.center_x);
+        const confidence = Number(item.confidence ?? item.score ?? item.prob);
+        return {
+          label: label || 'unknown',
+          y,
+          x,
+          confidence: Number.isFinite(confidence) ? confidence : null,
+        };
+      })
+      .filter((item) => Number.isFinite(item.y));
 
-      if (!normalized.length) return;
-      orderedShapes = normalized.slice().sort((a, b) => a.y - b.y);
-      orderedLabels = orderedShapes.map((item) => item.label || 'unknown');
-      if (orderedLabels.length !== SEGMENTS) return;
-
-      const confList = orderedShapes.map((item) =>
-        Number.isFinite(item.confidence) ? item.confidence : Number(result.confidence || 0)
-      );
-      score = confList.reduce((sum, v) => sum + v, 0) / Math.max(1, confList.length);
-    } else {
-      if (!Array.isArray(result.slots)) return;
-      orderedLabels = result.slots.slice(0, SEGMENTS).map((label) => label || 'unknown');
-      score = Number(result.confidence || 0);
+    if (normalized.length !== SEGMENTS) {
+      if (this.data.scanHint !== '请将完整一列图形置入框内') {
+        this.setData({ scanHint: '请将完整一列图形置入框内' });
+      }
+      return;
     }
 
+    const orderedShapes = normalized.slice().sort((a, b) => a.y - b.y);
+    const orderedLabels = orderedShapes.map((item) => item.label || 'unknown');
+    const confList = orderedShapes.map((item) =>
+      Number.isFinite(item.confidence) ? item.confidence : Number(result.confidence || 0)
+    );
+    const score = confList.reduce((sum, v) => sum + v, 0) / Math.max(1, confList.length);
+
+    // ====== 2. 统计识别结果与 UI 文本 ======
     const safeLabels = orderedLabels.map((label) => label || 'unknown');
     const tunerStats = this.data.tunerStats || {};
     const countMap = { ...tunerStats };
@@ -716,14 +715,23 @@ Page({
       }, 2000);
     }
 
+    // ====== 3. 定位框绘制（使用后端返回的 x/y 中心点） ======
     const baseRect = this.cameraRect || { left: 0, top: 0, width: this.windowWidth, height: this.windowHeight };
     const overlayScaleX = width / baseRect.width;
     const overlayScaleY = height / baseRect.height;
     const overlayOffsetX = baseRect.left;
     const overlayOffsetY = baseRect.top;
 
-    this.drawOverlay(boxes, safeLabels, overlayScaleX, overlayScaleY, overlayOffsetX, overlayOffsetY);
+    const overlayBoxes = orderedShapes.map((item) => ({
+      x: Number.isFinite(item.x) ? item.x - roiX : roiW / 2,
+      y: Number.isFinite(item.y) ? item.y - roiY : roiH / 2,
+      w: roiW * 0.28,
+      h: roiH * 0.12,
+    }));
 
+    this.drawOverlay(overlayBoxes, safeLabels, overlayScaleX, overlayScaleY, overlayOffsetX, overlayOffsetY);
+
+    // ====== 4. 单次命中判定（circle=1 / cross=4 / 无 unknown/empty） ======
     const circleCount = safeLabels.filter((x) => x === 'circle').length;
     const crossCount = safeLabels.filter((x) => x === 'cross').length;
     const unknownCount = safeLabels.filter((x) => x === 'unknown').length;

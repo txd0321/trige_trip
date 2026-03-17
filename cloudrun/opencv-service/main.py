@@ -28,6 +28,10 @@ class RoiRequest(BaseModel):
 class ShapeItem(BaseModel):
     label: str
     y: float
+    x: float | None = None
+    yNorm: float | None = None
+    xNorm: float | None = None
+    inRoi: bool | None = None
     confidence: float | None = None
 
 
@@ -89,33 +93,66 @@ def adaptive_threshold(gray: np.ndarray) -> np.ndarray:
 # =====================
 # ROI 候选框检测（严格 y 轴识别）
 # =====================
-def find_dynamic_boxes(gray: np.ndarray, segments: int = 5) -> tuple[list[tuple[int, int, int, int]], str]:
+def find_dynamic_boxes(gray: np.ndarray, segments: int = 5) -> tuple[list[tuple[int, int, int, int]], str, dict]:
     h, w = gray.shape[:2]
     if h == 0 or w == 0:
-        return [], "empty"
+        return [], "empty", {"candidateCount": 0, "filteredByArea": 0, "filteredByRatio": 0, "edgeMean": 0.0}
 
     edge = cv2.Canny(gray, 40, 120)
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
     edge = cv2.morphologyEx(edge, cv2.MORPH_CLOSE, kernel, iterations=2)
 
+    edge_vals = edge.astype(np.float32) / 255.0
+    edge_mean = float(np.mean(edge_vals))
+    edge_std = float(np.std(edge_vals))
+
     contours, _ = cv2.findContours(edge, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if not contours:
-        return [], "no_contour"
+        return [], "no_contour", {"candidateCount": 0, "filteredByArea": 0, "filteredByRatio": 0, "edgeMean": edge_mean}
 
-    min_area = max(80, int(h * w * 0.002))
+    min_area = max(60, int(h * w * 0.0012))
     candidates = []
+    filtered_by_area = 0
+    filtered_by_ratio = 0
+    contour_debug = []
+
     for c in contours:
         x, y, cw, ch = cv2.boundingRect(c)
         area = cw * ch
-        if area < min_area:
-            continue
         ratio = ch / max(1, cw)
-        if ratio < 0.25 or ratio > 4.0:
-            continue
-        candidates.append((x, y, cw, ch, area))
+        status = "kept"
+        if area < min_area:
+            filtered_by_area += 1
+            status = "area"
+        elif ratio < 0.2 or ratio > 5.0:
+            filtered_by_ratio += 1
+            status = "ratio"
+        else:
+            candidates.append((x, y, cw, ch, area))
+
+        contour_debug.append(
+            {
+                "x": int(x),
+                "y": int(y),
+                "w": int(cw),
+                "h": int(ch),
+                "area": int(area),
+                "ratio": float(ratio),
+                "status": status,
+            }
+        )
+
+    diag = {
+        "candidateCount": len(candidates),
+        "filteredByArea": filtered_by_area,
+        "filteredByRatio": filtered_by_ratio,
+        "edgeMean": edge_mean,
+        "edgeStd": edge_std,
+        "contours": contour_debug,
+    }
 
     if len(candidates) < segments:
-        return [], "too_few"
+        return [(x, y, cw, ch) for (x, y, cw, ch, _area) in candidates], "too_few", diag
 
     candidates.sort(key=lambda v: v[4], reverse=True)
     candidates = candidates[: max(segments * 2, 8)]
@@ -128,7 +165,7 @@ def find_dynamic_boxes(gray: np.ndarray, segments: int = 5) -> tuple[list[tuple[
         chosen = candidates
 
     boxes = [(x, y, cw, ch) for (x, y, cw, ch, _area) in chosen]
-    return boxes, "dynamic"
+    return boxes, "dynamic", diag
 
 
 # =====================
@@ -270,6 +307,9 @@ def detect_roi(payload: RoiRequest):
     gray = auto_adjust(gray)
     gray = adaptive_threshold(gray)
 
+    roi_mean = float(np.mean(gray)) if gray.size else 0.0
+    roi_std = float(np.std(gray)) if gray.size else 0.0
+
     h, w = gray.shape[:2]
     if h > 0 and w > 0:
         pad = int(min(h, w) * 0.04)
@@ -283,9 +323,10 @@ def detect_roi(payload: RoiRequest):
     edge_ratio_empty = float(payload.edgeRatioEmpty or 0.015)
     match_threshold = float(payload.matchThreshold or 0.32)
 
-    boxes, box_mode = find_dynamic_boxes(gray, 5)
+    boxes, box_mode, box_diag = find_dynamic_boxes(gray, 5)
     if not boxes:
-        return {"slots": ["unknown"] * 5, "confidence": 0.0, "latencyMs": 0, "items": [], "debug": {"boxMode": box_mode}}
+        debug = {"boxMode": box_mode, "diagnostic": {**box_diag, "boxMode": box_mode}}
+        return {"slots": [], "confidence": 0.0, "latencyMs": 0, "items": [], "debug": debug}
 
     segments = []
     for (x, y, bw, bh) in boxes:
@@ -319,15 +360,21 @@ def detect_roi(payload: RoiRequest):
 
         if boxes and idx < len(boxes):
             x, y, bw, bh = boxes[idx]
+            cx = float(x + bw * 0.5)
             cy = float(y + bh * 0.5)
         else:
             seg_h = h / max(1, len(segments))
+            cx = float(w * 0.5)
             cy = float((idx + 0.5) * seg_h)
 
         items.append(
             {
                 "label": labels[-1],
                 "y": cy,
+                "x": cx,
+                "yNorm": float(cy / max(1.0, h)),
+                "xNorm": float(cx / max(1.0, w)),
+                "inRoi": 0 <= cx <= w and 0 <= cy <= h,
                 "confidence": float(confs[-1]),
             }
         )
@@ -343,5 +390,9 @@ def detect_roi(payload: RoiRequest):
         "matchScores": match_scores,
         "boxMode": box_mode,
         "boxCount": len(boxes),
+        "roiMean": roi_mean,
+        "roiStd": roi_std,
+        "sortedY": sorted([float(item.get("y", 0)) for item in items]) if items else [],
+        "diagnostic": {**box_diag, "boxMode": box_mode},
     }
     return {"slots": labels, "confidence": confidence, "latencyMs": latency_ms, "items": items, "debug": debug}
