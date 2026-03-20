@@ -256,18 +256,18 @@ graph TD;
 ### 功能点
 1. **实时摄像头预览**：使用 `camera` 组件，并通过 `onCameraFrame` 实时获取视频帧数据。
 2. **居中竖向 ROI 框**：固定竖向矩形框（100*700 rpx），带呼吸动画，引导识别区域对准。
-3. **OpenCV 云托管识别（推荐）**
+3. **云托管整组模式识别（推荐）**
    - 客户端裁剪 ROI 图像并上传云托管服务（建议短边 480px 压缩）。
-   - 云托管使用 OpenCV 识别 circle / cross（自适应二值化 + 形态学 + 模板比对），并返回每个图形的中心点 `y` 坐标。
-   - 返回图形列表、置信度与耗时。
+   - 云托管使用整组分类模型识别 6 类模式（`pattern_circle_1~5` + `pattern_all_cross`）。
+   - 同时返回模式标签、模式置信度，以及用于可视化的 5 个图形框（按纵向排序）。
 4. **可视化反馈**
    - 叠加透明 Canvas 层，实时绘制识别到的图形与其 `y` 坐标指示线。
    - 识别结果高亮：绿色-圆形，橙色-叉，半透明白-空。
    - 顶部实时显示形状组合，如 `● ❌ — ❌ —`。
 5. **识别判定与音符触发**
-   - **基础合法性校验**：在 ROI 中识别到的图形必须满足 circle 数量 = 1、cross 数量 = 4、总数 = 5（不允许 unknown / empty），否则直接判为无效帧。
-   - **纵向位置定位**：按 5 个图形的 `y` 坐标从小到大排序，找到 circle 的序位（1–5）。
-   - **步骤匹配**：circle 序位必须与 `CIRCLE_IDX_SEQ[currentTargetIndex]` 一致，才算当前帧命中。
+   - **模式合法性校验**：仅接受 6 类标签：`pattern_circle_1~5`、`pattern_all_cross`；其余视为无效帧。
+   - **模式映射**：将 `pattern_circle_1~5` 映射为 circle 序位（1~5），`pattern_all_cross` 映射为“无圆”。
+   - **步骤匹配**：当前识别模式必须与 `TARGET_PATTERN_SEQ[currentTargetIndex]` 一致，才算当前帧命中。
    - **命中反馈**：命中时 Toast 提示音符名称，并播放音效（当前为震动代替）。
 6. **进度累计与完成**
    - 按顺序完成 13 次目标模式识别（有重复音符）。
@@ -294,16 +294,15 @@ graph TD;
 | 13 | ❌●❌❌❌ | E5 |
 
 ### 接口 / 数据
-- **OpenCV 云托管识别**：`POST /api/vision/roi`
-  - 请求：`{ imageBase64, seq, timestamp }`
-  - 响应：`{ slots:["circle","cross","empty"], confidence, latencyMs }`
+- **云托管整组模式识别**：`POST /api/vision/roi`
+  - 请求：`{ imageBase64, seq, timestamp, roiXRatio, roiYRatio, roiWRatio, roiHRatio }`
+  - 响应：`{ patternLabel, patternScore, slots:["circle"|"cross"], confidence, latencyMs, items:[{x,y,w,h,label,confidence}] }`
 - **云托管处理流程（ROI 识别）**
   1. Base64 解码 → 灰度化 → CLAHE（抗光照） → 高斯降噪。
-  2. ROI 内自动定位主图案区域（最大主轮廓 / 最小外接矩形）。
-  3. 透视矫正 `warpPerspective` → 统一尺寸归一化（抗偏移与倾斜）。
-  4. 对识别到的每个图形输出中心点 `y` 坐标（ROI 内相对值）。
-  5. 做模板比对（circle/cross）+ 像素占比与轮廓兜底（抗距离缩放）。
-  6. 输出图形列表、`y` 坐标与 confidence（包含稳定度），返回耗时。
+  2. ROI 裁剪后输入整组 6 分类模型（`pattern_circle_1~5` + `pattern_all_cross`）。
+  3. 输出 `patternLabel` 与 `patternScore`（模式置信度）。
+  4. 服务端按模式映射生成 5 个纵向图形标签（`slots`）与可视化框（`items`）。
+  5. 前端使用 `patternLabel` 进行步骤匹配，`items` 仅用于叠加显示。
 - **识别节流/超时建议**：单次调用超时 1200ms；并发仅允许 1 个请求；连续 2 次超时触发“请调整光线”。
 - **音频资源**：`playNoteAudio`（当前为震动替代，后续可扩展云端 mp3）。
 

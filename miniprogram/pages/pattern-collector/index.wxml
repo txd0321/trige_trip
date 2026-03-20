@@ -1,0 +1,66 @@
+<view class="page">
+  <camera
+    id="collectorCamera"
+    class="camera"
+    device-position="back"
+    flash="off"
+    frame-size="large"
+    style="position:absolute;left:0;top:0;width:100vw;height:100vh;"
+  ></camera>
+
+  <canvas
+    canvas-id="collectorOverlay"
+    class="overlay"
+    style="width:100vw;height:100vh;"
+    width="{{canvasWidth}}"
+    height="{{canvasHeight}}"
+  />
+
+  <canvas
+    canvas-id="collectorCropCanvas"
+    class="crop-canvas"
+    style="position:absolute;left:-9999px;top:-9999px;opacity:0;width:{{cropCanvasWidth}}px;height:{{cropCanvasHeight}}px;"
+    width="{{cropCanvasWidth}}"
+    height="{{cropCanvasHeight}}"
+  />
+
+  <canvas
+    canvas-id="collectorInferCanvas"
+    class="crop-canvas"
+    style="position:absolute;left:-9999px;top:-9999px;opacity:0;width:{{inferCanvasSize}}px;height:{{inferCanvasSize}}px;"
+    width="{{inferCanvasSize}}"
+    height="{{inferCanvasSize}}"
+  />
+
+  <view class="top-bar">
+    <view class="title">整组图案采集</view>
+    <view class="subtitle">当前类别：{{currentClass}}</view>
+  </view>
+
+  <view class="class-panel">
+    <picker mode="selector" range="{{classOptions}}" value="{{classIndex}}" bindchange="onClassChange">
+      <view class="picker-btn">切换类别（{{classOptions[classIndex]}}）</view>
+    </picker>
+    <view class="counter">当前类别已拍：{{classCounters[currentClass] || 0}}</view>
+    <view class="counter">总计：{{totalCount}}</view>
+  </view>
+
+  <view class="bottom-actions">
+    <view class="btn ghost" bindtap="togglePreviewRoi">{{showRoiPreview ? '隐藏ROI预览' : '显示ROI预览'}}</view>
+    <view class="btn primary" bindtap="captureRoi">拍照并采集</view>
+    <view class="btn secondary" bindtap="captureAndInfer">拍照并识别</view>
+    <view class="btn ghost" bindtap="exportManifest">导出清单JSON</view>
+  </view>
+
+  <view class="tips">
+    将整组图案放入蓝色框内；每类建议至少拍 150 张。
+  </view>
+
+  <view class="preview-card" wx:if="{{showRoiPreview && lastRoiPath}}">
+    <view class="preview-title">最近一张 ROI（采集/识别复用）</view>
+    <image class="preview-img" src="{{lastRoiPath}}" mode="aspectFit"/>
+    <view class="preview-path" wx:if="{{lastCosKey}}">{{lastCosKey}}</view>
+    <view class="preview-path" wx:if="{{inferLabel}}">识别：{{inferLabel}}（{{inferConfidenceText}}）</view>
+    <view class="preview-path" wx:if="{{inferDebugText}}">debug: {{inferDebugText}}</view>
+  </view>
+</view>

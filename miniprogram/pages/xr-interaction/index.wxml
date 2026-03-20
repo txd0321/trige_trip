@@ -1,7 +1,12 @@
 <view class="page">
-  <view class="camera-wrap" style="left:{{cameraWrapLeft}}px;top:{{cameraWrapTop}}px;width:{{cameraWrapWidth}}px;height:{{cameraWrapHeight}}px;" wx:if="{{step !== 'blow' && step !== 'done'}}">
-    <camera class="camera" device-position="back" flash="off" frame-size="small"></camera>
-  </view>
+  <camera
+    class="camera"
+    device-position="back"
+    flash="off"
+    frame-size="small"
+    style="position:absolute;left:0;top:0;width:100vw;height:100vh;"
+    wx:if="{{step !== 'blow' && step !== 'done'}}"
+  ></camera>
 
   <view class="candle-bg" wx:if="{{step === 'blow' || step === 'done'}}">
     <image class="candle-image" src="/assets/images/candle.png" mode="aspectFit" />
@@ -13,12 +18,26 @@
     style="width:100vw;height:100vh;"
     width="{{canvasWidth}}"
     height="{{canvasHeight}}"
-    wx:if="{{!showTuner}}"
+  />
+
+  <canvas
+    canvas-id="roiPreviewCanvas"
+    class="roi-preview-canvas"
+    style="width:{{roiPreviewWidth}}px;height:{{roiPreviewHeight}}px;position:absolute;left:-9999px;top:-9999px;opacity:0;"
+    width="{{roiPreviewWidth}}"
+    height="{{roiPreviewHeight}}"
   />
 
   <view class="top-bar">
     <view class="top-back" bindtap="goHome">返回</view>
     <view class="top-title">XR互动</view>
+    <view class="top-actions" wx:if="{{step === 'scan'}}">
+      <view class="top-btn detect" bindtap="toggleDetect">{{detectEnabled ? '停止识别' : '开始识别'}}</view>
+      <view class="top-btn" bindtap="toggleTuner">参数调试</view>
+      <view class="top-btn" bindtap="toggleDebugRoiBinary">{{debugRoiBinary ? '灰度预览' : '黑白预览'}}</view>
+      <view class="top-btn sample" bindtap="toggleSampleCollect">{{sampleCollecting ? ('采集中 ' + sampleCollectCount + '/' + sampleCollectTarget) : '开始采集'}}</view>
+      <view class="top-btn export" bindtap="exportSampleJson">导出采样JSON</view>
+    </view>
   </view>
 
   <view class="status-text {{scanState === 'cooldown' ? 'cooldown' : ''}}" wx:if="{{step === 'scan'}}">{{scanPattern}}</view>
@@ -33,8 +52,9 @@
   </view>
 
 
-  <cover-view class="tuner-toggle" bindtap="toggleTuner" wx:if="{{step === 'scan'}}">参数调试</cover-view>
-  <cover-view class="freeze-toggle" bindtap="toggleFreezeDetect" wx:if="{{step === 'scan'}}">{{freezeDetect ? '解除冻结' : '冻结当前帧'}}</cover-view>
+  <cover-view class="sample-progress" wx:if="{{step === 'scan' && sampleCollecting}}">
+    <cover-view class="sample-progress-inner">采集进度：{{sampleCollectCount}} / {{sampleCollectTarget}}</cover-view>
+  </cover-view>
   <view class="tuner-panel" wx:if="{{step === 'scan' && showTuner}}">
     <scroll-view class="tuner-scroll" scroll-y>
       <view class="tuner-title">识别参数调试</view>
@@ -118,6 +138,43 @@
       <view class="tuner-item">
         <view>Debug</view>
         <view class="debug-text">{{lastDebugText}}</view>
+      </view>
+      <view class="tuner-title">识别框详情</view>
+      <view class="tuner-table" wx:if="{{scanItemsTable && scanItemsTable.length}}">
+        <view class="tuner-table-header">
+          <text class="col col-idx">#</text>
+          <text class="col col-label">类型</text>
+          <text class="col col-x">X</text>
+          <text class="col col-y">Y</text>
+          <text class="col col-w">W</text>
+          <text class="col col-h">H</text>
+        </view>
+        <view class="tuner-table-row" wx:for="{{scanItemsTable}}" wx:key="idx">
+          <text class="col col-idx">{{item.idx}}</text>
+          <text class="col col-label">{{item.label}}</text>
+          <text class="col col-x">{{item.x === null ? '-' : item.x}}</text>
+          <text class="col col-y">{{item.y === null ? '-' : item.y}}</text>
+          <text class="col col-w">{{item.w === null ? '-' : item.w}}</text>
+          <text class="col col-h">{{item.h === null ? '-' : item.h}}</text>
+        </view>
+      </view>
+      <view class="tuner-item">
+        <view>识别框详情</view>
+        <view class="debug-text">{{scanItemsPreview}}</view>
+      </view>
+      <view class="roi-preview-grid" wx:if="{{debugImageEdge || debugImageThreshold || debugImageInput}}">
+        <view class="roi-preview-cell" wx:if="{{debugImageInput}}">
+          <view class="roi-preview-title">ROI Input</view>
+          <image class="roi-preview-image" src="{{debugImageInput}}" mode="aspectFit" />
+        </view>
+        <view class="roi-preview-cell" wx:if="{{debugImageEdge}}">
+          <view class="roi-preview-title">Edge</view>
+          <image class="roi-preview-image" src="{{debugImageEdge}}" mode="aspectFit" />
+        </view>
+        <view class="roi-preview-cell" wx:if="{{debugImageThreshold}}">
+          <view class="roi-preview-title">Threshold</view>
+          <image class="roi-preview-image" src="{{debugImageThreshold}}" mode="aspectFit" />
+        </view>
       </view>
     </scroll-view>
   </view>

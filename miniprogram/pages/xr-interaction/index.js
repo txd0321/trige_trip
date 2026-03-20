@@ -14,13 +14,13 @@ const ROI_SEG_NOTE = [
 const CIRCLE_IDX_SEQ = [4, 4, 3, 4, 1, 2, null, 4, 4, 3, 4, 0, 1];
 const STEP_NOTE_NAME = ['B4', 'B4', 'C5', 'B4', 'E5', 'D5', '', 'B4', 'B4', 'C5', 'B4', 'F5', 'E5'];
 
-const REQUEST_INTERVAL_MS = 160;
-const REQUEST_INTERVAL_WEAK_MS = 330;
-const REQUEST_TIMEOUT_MS = 1200;
+const REQUEST_INTERVAL_MS = 1800;
+const REQUEST_INTERVAL_WEAK_MS = 3000;
+const REQUEST_TIMEOUT_MS = 5000;
 const COOLDOWN_MS = 2000;
 const MATCHED_MS = 800;
 
-const OPENCV_BASE_URL = 'https://opencv-service-234509-7-1327655007.sh.run.tcloudbase.com';
+const OPENCV_BASE_URL = 'https://racks-animals-alfred-montreal.trycloudflare.com';
 
 const FRAME_MIN_CONF = 0.65;
 const STABLE_MIN_AVG_CONF = 0.82;
@@ -58,6 +58,72 @@ function mapRectCoverToUi(imgRect, imgSize, uiSize) {
   };
 }
 
+function mapRectUiToImage(uiRect, uiSize, imgSize) {
+  const uiAspect = uiSize.width / uiSize.height;
+  const imgAspect = imgSize.width / imgSize.height;
+
+  let scale = 1;
+  let offsetX = 0;
+  let offsetY = 0;
+
+  if (imgAspect > uiAspect) {
+    scale = uiSize.height / imgSize.height;
+    offsetX = (uiSize.width - imgSize.width * scale) / 2;
+  } else {
+    scale = uiSize.width / imgSize.width;
+    offsetY = (uiSize.height - imgSize.height * scale) / 2;
+  }
+
+  return {
+    x: Math.round((uiRect.x - offsetX) / scale),
+    y: Math.round((uiRect.y - offsetY) / scale),
+    width: Math.round(uiRect.width / scale),
+    height: Math.round(uiRect.height / scale),
+  };
+}
+
+function mapRectCoverToImage(imgRect, imgSize, targetSize) {
+  const imgAspect = imgSize.width / imgSize.height;
+  const targetAspect = targetSize.width / targetSize.height;
+
+  let scale = 1;
+  let offsetX = 0;
+  let offsetY = 0;
+
+  if (imgAspect > targetAspect) {
+    scale = targetSize.height / imgSize.height;
+    offsetX = (targetSize.width - imgSize.width * scale) / 2;
+  } else {
+    scale = targetSize.width / imgSize.width;
+    offsetY = (targetSize.height - imgSize.height * scale) / 2;
+  }
+
+  return {
+    x: imgRect.x * scale + offsetX,
+    y: imgRect.y * scale + offsetY,
+    width: imgRect.width * scale,
+    height: imgRect.height * scale,
+  };
+}
+
+function callFunctionWithTimeout(name, data, timeout = REQUEST_TIMEOUT_MS) {
+  return Promise.race([
+    new Promise((resolve, reject) => {
+      if (!wx.cloud || !wx.cloud.callFunction) {
+        reject(new Error('wx.cloud.callFunction not available'));
+        return;
+      }
+      wx.cloud.callFunction({
+        name,
+        data,
+        success: resolve,
+        fail: reject,
+      });
+    }),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), timeout)),
+  ]);
+}
+
 function requestWithTimeout(options, timeout = REQUEST_TIMEOUT_MS) {
   return Promise.race([
     new Promise((resolve, reject) => {
@@ -69,6 +135,17 @@ function requestWithTimeout(options, timeout = REQUEST_TIMEOUT_MS) {
     }),
     new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), timeout)),
   ]);
+}
+
+function readFileAsBase64(path) {
+  return new Promise((resolve, reject) => {
+    wx.getFileSystemManager().readFile({
+      filePath: path,
+      encoding: 'base64',
+      success: (res) => resolve(res.data || ''),
+      fail: reject,
+    });
+  });
 }
 
 function calcRms(buffer) {
@@ -103,14 +180,14 @@ Page({
     showAchievement: false,
     canvasWidth: 0,
     canvasHeight: 0,
-    showTuner: false,
+    showTuner: true,
     tuner: {
       frameMinConf: FRAME_MIN_CONF,
       stableMinAvgConf: STABLE_MIN_AVG_CONF,
       requestInterval: REQUEST_INTERVAL_MS,
       requestIntervalWeak: REQUEST_INTERVAL_WEAK_MS,
-      cannyLow: 40,
-      cannyHigh: 120,
+      cannyLow: 20,
+      cannyHigh: 80,
       edgeRatioEmpty: 0.015,
       matchThreshold: 0.32,
     },
@@ -123,17 +200,27 @@ Page({
       avgLatency: 0,
     },
     lastDebugText: '',
-    freezeDetect: false,
+    debugImageEdge: '',
+    debugImageThreshold: '',
+    debugImageInput: '',
+    debugRoi: true,
+    debugRoiBinary: false,
+    roiTransformMode: 'none',
+    roiPreviewWidth: 0,
+    roiPreviewHeight: 0,
+    scanItemsTable: [],
+    freezeDetect: true,
+    sampleCollecting: false,
+    sampleCollectTarget: 20,
+    sampleCollectCount: 0,
+    sampleLastFilePath: '',
+    detectEnabled: false,
     uiRoiX: 0,
     uiRoiY: 0,
     uiRoiW: 0,
     uiRoiH: 0,
     maskSafeTop: 0,
     maskTopHeight: 0,
-    cameraWrapLeft: 0,
-    cameraWrapTop: 0,
-    cameraWrapWidth: 0,
-    cameraWrapHeight: 0,
   },
 
   onLoad(options) {
@@ -163,38 +250,29 @@ Page({
 
     const safeTop = Math.max(0, sysInfo.statusBarHeight || 0);
     const safeBottom = Math.max(0, sysInfo.safeAreaInsets ? sysInfo.safeAreaInsets.bottom || 0 : 0);
-    const availableH = this.windowHeight - safeTop - safeBottom;
-    const targetRatio = 4 / 3;
 
-    let cameraWrapWidth = this.windowWidth;
-    let cameraWrapHeight = Math.round(cameraWrapWidth * targetRatio);
-    if (cameraWrapHeight > availableH) {
-      cameraWrapHeight = availableH;
-      cameraWrapWidth = Math.round(cameraWrapHeight / targetRatio);
-    }
+    const roiTargetRatioW = 0.26;
+    const roiTargetRatioH = 0.80;
 
-    const cameraWrapLeft = Math.round((this.windowWidth - cameraWrapWidth) / 2);
-    const cameraWrapTop = Math.round(safeTop + (availableH - cameraWrapHeight) / 2);
-
-    this.uiRoiW = Math.floor((140 * cameraWrapWidth) / 750);
-    this.uiRoiH = Math.floor((760 * cameraWrapWidth) / 750);
-    this.uiRoiX = Math.floor(cameraWrapLeft + cameraWrapWidth / 2 - this.uiRoiW / 2);
-    this.uiRoiY = Math.floor(cameraWrapTop + cameraWrapHeight / 2 - this.uiRoiH / 2);
+    this.uiRoiW = Math.floor(this.windowWidth * roiTargetRatioW);
+    this.uiRoiH = Math.floor(this.windowHeight * roiTargetRatioH);
+    this.uiRoiX = Math.floor(this.windowWidth / 2 - this.uiRoiW / 2);
+    this.uiRoiY = Math.floor(this.windowHeight / 2 - this.uiRoiH / 2);
 
     const topOverlayRpx = 300;
-    const topOverlayPx = Math.floor((topOverlayRpx * cameraWrapWidth) / 750);
+    const topOverlayPx = Math.floor((topOverlayRpx * this.windowWidth) / 750);
     const maskSafeTop = Math.max(safeTop, topOverlayPx);
     const maskTopHeight = Math.max(0, this.uiRoiY - maskSafeTop);
 
     this.roiRectOnCamera = {
-      x: this.uiRoiX - cameraWrapLeft,
-      y: this.uiRoiY - cameraWrapTop,
+      x: this.uiRoiX,
+      y: this.uiRoiY,
       width: this.uiRoiW,
       height: this.uiRoiH,
     };
 
-    this.roiRatioW = this.uiRoiW / cameraWrapWidth;
-    this.roiRatioH = this.uiRoiH / cameraWrapHeight;
+    this.roiTargetRatioW = roiTargetRatioW;
+    this.roiTargetRatioH = roiTargetRatioH;
 
     this.setData({
       uiRoiW: this.uiRoiW,
@@ -203,10 +281,6 @@ Page({
       uiRoiY: this.uiRoiY,
       maskSafeTop: maskSafeTop,
       maskTopHeight: maskTopHeight,
-      cameraWrapLeft,
-      cameraWrapTop,
-      cameraWrapWidth,
-      cameraWrapHeight,
     });
 
     this.cameraRect = { left: 0, top: 0, width: this.windowWidth, height: this.windowHeight };
@@ -250,19 +324,66 @@ Page({
     this.blowRmsBuffer = [];
     this.blowAboveStart = 0;
 
-    this.listener = this.camCtx.onCameraFrame(this.handleFrame.bind(this));
-    this.listener.start();
+    // 使用 takePhoto 驱动识别，避免不同机型 frame.data 格式差异
+    this.listener = null;
+    this.detectLoopActive = true;
+    // 默认进入页面不自动识别，需手动点击“开始识别”
   },
 
-  toggleFreezeDetect() {
-    const next = !this.data.freezeDetect;
-    this.setData({ freezeDetect: next });
-    this.freezeOnceSent = false;
-    if (!next) {
-      this.frozenFrame = null;
-      this.frozenFrameW = 0;
-      this.frozenFrameH = 0;
+  toggleDebugRoiBinary() {
+    this.setData({ debugRoiBinary: !this.data.debugRoiBinary });
+  },
+
+  toggleDetect() {
+    const next = !this.data.detectEnabled;
+    this.setData({ detectEnabled: next });
+    if (next) {
+      if (!this.detectLoopActive) this.detectLoopActive = true;
+      if (this.scanTimer) clearTimeout(this.scanTimer);
+      this.scheduleScanByPhoto();
+      wx.showToast({ title: '开始识别', icon: 'none' });
+    } else {
+      if (this.scanTimer) clearTimeout(this.scanTimer);
+      wx.showToast({ title: '已停止识别', icon: 'none' });
     }
+  },
+
+  toggleSampleCollect() {
+    const next = !this.data.sampleCollecting;
+    if (next) {
+      this.sampleFrames = [];
+      this.setData({
+        sampleCollecting: true,
+        sampleCollectCount: 0,
+      });
+      wx.showToast({ title: '开始采集', icon: 'none' });
+    } else {
+      this.setData({ sampleCollecting: false });
+      wx.showToast({ title: `已停止，已采 ${this.data.sampleCollectCount} 帧`, icon: 'none' });
+    }
+  },
+
+  exportSampleJson() {
+    const filePath = this.data.sampleLastFilePath;
+    if (!filePath) {
+      wx.showToast({ title: '暂无采样文件', icon: 'none' });
+      return;
+    }
+    wx.getFileSystemManager().readFile({
+      filePath,
+      encoding: 'utf8',
+      success: (res) => {
+        const text = String(res.data || '');
+        console.log('[sample-json-path]', filePath);
+        console.log('[sample-json-content]', text);
+        wx.setClipboardData({
+          data: text,
+          success: () => wx.showToast({ title: '已复制JSON到剪贴板', icon: 'none' }),
+          fail: () => wx.showToast({ title: '导出失败', icon: 'none' }),
+        });
+      },
+      fail: () => wx.showToast({ title: '读取文件失败', icon: 'none' }),
+    });
   },
 
   onHide() {
@@ -275,6 +396,7 @@ Page({
 
   stopAll() {
     if (this.listener) this.listener.stop();
+    this.detectLoopActive = false;
     this.requestPending = false;
     if (this.overlayCtx) {
       this.overlayCtx.clearRect(0, 0, this.windowWidth, this.windowHeight);
@@ -287,6 +409,29 @@ Page({
     if (this.blowTimeoutTimer) clearTimeout(this.blowTimeoutTimer);
     if (this.snapshotTimer) clearTimeout(this.snapshotTimer);
     this.stopRecorder();
+  },
+
+  takePhotoWithTimeout(timeout = REQUEST_TIMEOUT_MS) {
+    return Promise.race([
+      new Promise((resolve, reject) => {
+        this.camCtx.takePhoto({
+          quality: 'low',
+          success: resolve,
+          fail: reject,
+        });
+      }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('takePhoto timeout')), timeout)),
+    ]);
+  },
+
+  getImageInfo(path) {
+    return new Promise((resolve, reject) => {
+      wx.getImageInfo({
+        src: path,
+        success: resolve,
+        fail: reject,
+      });
+    });
   },
 
   buildBinaryRoi(yPlane, frameW, roiX, roiY, roiW, roiH, threshold, step) {
@@ -417,10 +562,31 @@ Page({
     const ctx = this.overlayCtx;
     ctx.clearRect(0, 0, this.windowWidth, this.windowHeight);
 
+    const baseRect = this.cameraRect || { left: 0, top: 0, width: this.windowWidth, height: this.windowHeight };
+    const { roiX, roiY, roiW, roiH } = this.getFrameRoi(this.stableFrameW || this.windowWidth, this.stableFrameH || this.windowHeight);
+    const mapped = mapRectCoverToUi(
+      { x: roiX, y: roiY, width: roiW, height: roiH },
+      { width: this.stableFrameW || this.windowWidth, height: this.stableFrameH || this.windowHeight },
+      { width: baseRect.width, height: baseRect.height }
+    );
+
+    ctx.setLineWidth(3);
+    ctx.setStrokeStyle('#00c2ff');
+    ctx.strokeRect(mapped.x + baseRect.left, mapped.y + baseRect.top, mapped.width, mapped.height);
+
+    if (this.debugRoiRect) {
+      ctx.setLineWidth(2);
+      ctx.setStrokeStyle('#ff4d4f');
+      ctx.strokeRect(this.debugRoiRect.x, this.debugRoiRect.y, this.debugRoiRect.width, this.debugRoiRect.height);
+    }
+
+    if (this.data.debugRoi && this.debugRoiRect) {
+      ctx.setLineWidth(2);
+      ctx.setStrokeStyle('rgba(255,0,0,0.75)');
+      ctx.strokeRect(this.debugRoiRect.x, this.debugRoiRect.y, this.debugRoiRect.width, this.debugRoiRect.height);
+    }
+
     if (!boxes || !boxes.length) {
-      ctx.setStrokeStyle('#ffffffaa');
-      ctx.setLineWidth(3);
-      ctx.strokeRect(this.uiRoiX, this.uiRoiY, this.uiRoiW, this.uiRoiH);
       ctx.draw();
       return;
     }
@@ -453,9 +619,69 @@ Page({
       ctx.setFillStyle(color);
       ctx.setFontSize(16);
       ctx.fillText(text, x + w / 2 - 6, y + h / 2 + 6);
+
+      ctx.setFillStyle('#ffffff');
+      ctx.setFontSize(12);
+      ctx.fillText(String(i + 1), x + 4, y + 14);
     }
 
     ctx.draw();
+  },
+
+  updateScanPreview(normalized, roiX, roiY, roiW, roiH, width, height) {
+    const baseRect = this.cameraRect || { left: 0, top: 0, width: this.windowWidth, height: this.windowHeight };
+    const overlayScaleX = width / baseRect.width;
+    const overlayScaleY = height / baseRect.height;
+    const overlayOffsetX = baseRect.left;
+    const overlayOffsetY = baseRect.top;
+
+    if (!normalized.length) {
+      this.drawOverlay([], [], overlayScaleX, overlayScaleY, overlayOffsetX, overlayOffsetY);
+      if (this.data.scanHint !== '识别到 0 个图形') {
+        this.setData({ scanHint: '识别到 0 个图形', scanPattern: '' });
+      }
+      return null;
+    }
+
+    const orderedPreview = normalized.slice().sort((a, b) => a.y - b.y);
+    const previewLabels = orderedPreview.map((item) => item.label || 'unknown');
+    const patternSymbols = previewLabels.map((c) => (c === 'circle' ? '●' : c === 'cross' ? '❌' : c === 'empty' ? '—' : '?'));
+    const patternStr = patternSymbols.join(' ');
+
+    const overlayBoxes = orderedPreview.map((item) => ({
+      x: Number.isFinite(item.x) ? item.x - (Number.isFinite(item.w) ? item.w / 2 : 0) : roiW / 2,
+      y: Number.isFinite(item.y) ? item.y - (Number.isFinite(item.h) ? item.h / 2 : 0) : roiH / 2,
+      w: Number.isFinite(item.w) ? item.w : roiW * 0.28,
+      h: Number.isFinite(item.h) ? item.h : roiH * 0.12,
+    }));
+
+    this.drawOverlay(overlayBoxes, previewLabels, overlayScaleX, overlayScaleY, overlayOffsetX, overlayOffsetY);
+
+    const hint = `识别到 ${normalized.length} 个图形：${patternStr}`;
+    const scanItemsTable = orderedPreview.map((item, idx) => {
+      const w = Number.isFinite(item.w) ? Number(item.w.toFixed(1)) : null;
+      const h = Number.isFinite(item.h) ? Number(item.h.toFixed(1)) : null;
+      const x = Number.isFinite(item.x) ? Number(item.x.toFixed(1)) : null;
+      const y = Number.isFinite(item.y) ? Number(item.y.toFixed(1)) : null;
+      return {
+        idx: idx + 1,
+        label: item.label || 'unknown',
+        x,
+        y,
+        w,
+        h,
+      };
+    });
+
+    if (hint !== this.data.scanHint || scanItemsTable !== this.data.scanItemsTable) {
+      this.setData({ scanHint: hint, scanPattern: patternStr, scanItemsTable });
+    }
+
+    return {
+      orderedPreview,
+      previewLabels,
+      patternStr,
+    };
   },
 
   pushVoteAndGetStable(circleIdx, confidence) {
@@ -489,8 +715,8 @@ Page({
   },
 
   getFrameRoi(frameW, frameH) {
-    const ratioW = Number(this.roiRatioW || 0.18);
-    const ratioH = Number(this.roiRatioH || 0.7);
+    const ratioW = Number(this.roiTargetRatioW || 0.28);
+    const ratioH = Number(this.roiTargetRatioH || 0.7);
     const roiW = Math.max(10, Math.floor(frameW * ratioW));
     const roiH = Math.max(60, Math.floor(frameH * ratioH));
     const roiX = clamp(Math.floor((frameW - roiW) / 2), 0, Math.max(0, frameW - roiW));
@@ -515,119 +741,180 @@ Page({
     });
   },
 
-  async handleFrame(frame) {
-    const { width, height } = frame;
-    if (!width || !height || !frame.data) return;
-
-    if (this.data.step !== 'scan' && this.data.step !== 'winder') return;
-
-    const baseRect = this.cameraRect || { left: 0, top: 0, width: this.windowWidth, height: this.windowHeight };
-    const scaleX = width / baseRect.width;
-    const scaleY = height / baseRect.height;
-
-    if (this.data.freezeDetect) {
-      if (!this.frozenFrame) {
-        this.frozenFrame = new Uint8Array(frame.data);
-        this.frozenFrameW = width;
-        this.frozenFrameH = height;
-      }
-      if (this.data.step === 'scan') {
-        this.updateUiRoiFromFrame(this.frozenFrameW, this.frozenFrameH);
-      }
-      if (!this.freezeOnceSent) {
-        await this.processFrameData(this.frozenFrame, this.frozenFrameW, this.frozenFrameH, scaleX, scaleY, baseRect);
-        this.freezeOnceSent = true;
-      }
-      return;
-    }
-
-    this.lastFrameW = width;
-    this.lastFrameH = height;
-
-    if (!this.stableFrameW || !this.stableFrameH) {
-      this.stableFrameW = width;
-      this.stableFrameH = height;
-    }
-
-    if (this.data.step === 'scan') {
-      this.updateUiRoiFromFrame(width, height);
-    }
-    await this.processFrameData(new Uint8Array(frame.data), width, height, scaleX, scaleY, baseRect);
-  },
-
-  async processFrameData(yPlane, width, height, scaleX, scaleY, baseRect) {
-    if (!this.data.freezeDetect) return;
-
-    const now = Date.now();
+  async scheduleScanByPhoto() {
+    if (!this.detectLoopActive) return;
+    if (!this.data.detectEnabled) return;
     const tuner = this.data.tuner || {};
     const intervalBase = Number(tuner.requestInterval || REQUEST_INTERVAL_MS);
     const intervalWeak = Number(tuner.requestIntervalWeak || REQUEST_INTERVAL_WEAK_MS);
     const interval = this.scanWeakNetwork ? intervalWeak : intervalBase;
-    if (now - this.lastRequestAt < interval) return;
-    this.lastRequestAt = now;
 
-    if (this.data.step === 'scan') {
-      await this.handleScanFrame(yPlane, width, height);
-    } else if (this.data.step === 'winder') {
-      await this.handleWinderFrame(yPlane, width, height, scaleX, scaleY, baseRect);
-    }
-  },
-
-  async handleScanFrame(yPlane, width, height) {
-    if (this.requestPending || this.data.scanState === 'cooldown' || this.data.scanState === 'matched') return;
-
-    const { roiX, roiY, roiW, roiH } = this.getFrameRoi(width, height);
-
-    const samples = [];
-    const sx = Math.max(2, Math.floor(roiW / 8));
-    const sy = Math.max(2, Math.floor(roiH / 14));
-    for (let y = roiY; y < roiY + roiH; y += sy) {
-      for (let x = roiX; x < roiX + roiW; x += sx) {
-        samples.push(yPlane[y * width + x]);
-      }
-    }
-    const avgSample = samples.reduce((a, b) => a + b, 0) / Math.max(1, samples.length);
-
-    const stableDiff = Math.abs(avgSample - (this.roiLastAvg || avgSample));
-    if (stableDiff < 10) {
-      this.roiStableCount = (this.roiStableCount || 0) + 1;
-    } else {
-      this.roiStableCount = 0;
-    }
-    this.roiLastAvg = avgSample;
-
-    if (!this.data.freezeDetect && this.roiStableCount < 2) {
+    if (this.data.step !== 'scan') {
+      this.scanTimer = setTimeout(() => this.scheduleScanByPhoto(), interval);
       return;
     }
 
+    if (this.requestPending || this.data.scanState === 'cooldown' || this.data.scanState === 'matched') {
+      this.scanTimer = setTimeout(() => this.scheduleScanByPhoto(), interval);
+      return;
+    }
 
-    const roiGray = new Uint8Array(roiW * roiH);
-    let k = 0;
-    for (let y = 0; y < roiH; y++) {
-      const srcY = roiY + y;
-      const rowOffset = srcY * width + roiX;
-      for (let x = 0; x < roiW; x++) {
-        roiGray[k++] = yPlane[rowOffset + x];
+    try {
+      const photo = await this.takePhotoWithTimeout(REQUEST_TIMEOUT_MS);
+      const path = photo && photo.tempImagePath;
+      if (path) {
+        const info = await this.getImageInfo(path);
+        const base64 = await readFileAsBase64(path);
+        if (info && info.width && info.height && base64) {
+          await this.handleScanPhoto(path, base64, info.width, info.height);
+        }
+      }
+    } catch (e) {
+      console.log('[scan-photo-error]', e);
+      if (this.data.sampleCollecting) {
+        this.scanWeakNetwork = true;
       }
     }
+
+    this.scanTimer = setTimeout(() => this.scheduleScanByPhoto(), interval);
+  },
+
+  async handleScanPhoto(photoPath, frameBase64, width, height) {
+    if (this.requestPending || this.data.scanState === 'cooldown' || this.data.scanState === 'matched') return;
+
+    const previewRect = this.cameraRect || { left: 0, top: 0, width: this.windowWidth, height: this.windowHeight };
+    const uiRect = {
+      x: this.uiRoiX - previewRect.left,
+      y: this.uiRoiY - previewRect.top,
+      width: this.uiRoiW,
+      height: this.uiRoiH,
+    };
+
+    const scale = Math.max(previewRect.width / width, previewRect.height / height);
+    const displayW = width * scale;
+    const displayH = height * scale;
+    const offsetX = (previewRect.width - displayW) / 2;
+    const offsetY = (previewRect.height - displayH) / 2;
+
+    let roiX = Math.round((uiRect.x - offsetX) / scale);
+    let roiY = Math.round((uiRect.y - offsetY) / scale);
+    let roiW = Math.max(10, Math.round(uiRect.width / scale));
+    let roiH = Math.max(60, Math.round(uiRect.height / scale));
+
+    const transform = (this.data.roiTransformMode || 'none');
+    const applyTransform = (x, y, w, h) => {
+      if (transform === 'rotate90') {
+        return { x: y, y: width - (x + w), w: h, h: w };
+      }
+      if (transform === 'rotate270') {
+        return { x: height - (y + h), y: x, w: h, h: w };
+      }
+      if (transform === 'mirrorX') {
+        return { x: width - (x + w), y, w, h };
+      }
+      return { x, y, w, h };
+    };
+
+    let t = applyTransform(roiX, roiY, roiW, roiH);
+    roiX = clamp(t.x, 0, Math.max(0, width - 1));
+    roiY = clamp(t.y, 0, Math.max(0, height - 1));
+    roiW = Math.max(10, Math.min(t.w, width - roiX));
+    roiH = Math.max(60, Math.min(t.h, height - roiY));
+
+    if (this.data.debugRoi) {
+      let back = t;
+      if (transform === 'rotate90') {
+        back = { x: width - (roiY + roiH), y: roiX, w: roiH, h: roiW };
+      } else if (transform === 'rotate270') {
+        back = { x: roiY, y: height - (roiX + roiW), w: roiH, h: roiW };
+      } else if (transform === 'mirrorX') {
+        back = { x: width - (roiX + roiW), y: roiY, w: roiW, h: roiH };
+      } else {
+        back = { x: roiX, y: roiY, w: roiW, h: roiH };
+      }
+      this.debugRoiRect = {
+        x: back.x * scale + offsetX + previewRect.left,
+        y: back.y * scale + offsetY + previewRect.top,
+        width: back.w * scale,
+        height: back.h * scale,
+      };
+    } else {
+      this.debugRoiRect = null;
+    }
+
+
+    const sendW = width;
+    const sendH = height;
+    const frameBase64Len = frameBase64.length;
+
+    let roiMean = 0;
+    let roiStd = 0;
+
+    if (this.data.debugRoi && photoPath) {
+      const canvasId = 'roiPreviewCanvas';
+      this.setData({ roiPreviewWidth: roiW, roiPreviewHeight: roiH }, () => {
+        const ctx = wx.createCanvasContext(canvasId, this);
+        ctx.clearRect(0, 0, roiW, roiH);
+        ctx.drawImage(photoPath, roiX, roiY, roiW, roiH, 0, 0, roiW, roiH);
+        ctx.draw(false, () => {
+          wx.canvasToTempFilePath(
+            {
+              canvasId,
+              x: 0,
+              y: 0,
+              width: roiW,
+              height: roiH,
+              destWidth: roiW * 4,
+              destHeight: roiH * 4,
+              success: (res) => this.setData({ debugImageInput: res.tempFilePath }),
+              fail: () => this.setData({ debugImageInput: '' }),
+            },
+            this
+          );
+        });
+      });
+    }
+    console.log(
+      '[roi-debug]',
+      JSON.stringify(
+        {
+          frameWidth: sendW,
+          frameHeight: sendH,
+          roiXRatio: Number(((roiX / width) || 0).toFixed(4)),
+          roiYRatio: Number(((roiY / height) || 0).toFixed(4)),
+          roiWRatio: Number(((roiW / width) || 0).toFixed(4)),
+          roiHRatio: Number(((roiH / height) || 0).toFixed(4)),
+          roiMean: Number(roiMean.toFixed(2)),
+          roiStd: Number(roiStd.toFixed(2)),
+          base64Length: frameBase64Len,
+        },
+        null,
+        2
+      )
+    );
 
     this.requestPending = true;
     let result;
     let latencyMs = 0;
+    this.scanFrameSeq = (this.scanFrameSeq || 0) + 1;
     try {
       const startAt = Date.now();
       const res = await requestWithTimeout({
         url: `${OPENCV_BASE_URL}/api/vision/roi`,
         method: 'POST',
         data: {
-          imageBase64: wx.arrayBufferToBase64(roiGray.buffer),
-          roiWidth: roiW,
-          roiHeight: roiH,
+          imageBase64: frameBase64,
+          imageWidth: sendW,
+          imageHeight: sendH,
+          roiXRatio: roiX / width,
+          roiYRatio: roiY / height,
+          roiWRatio: roiW / width,
+          roiHRatio: roiH / height,
           cannyLow: Number((this.data.tuner && this.data.tuner.cannyLow) || 40),
           cannyHigh: Number((this.data.tuner && this.data.tuner.cannyHigh) || 120),
           edgeRatioEmpty: Number((this.data.tuner && this.data.tuner.edgeRatioEmpty) || 0.015),
           matchThreshold: Number((this.data.tuner && this.data.tuner.matchThreshold) || 0.32),
-          seq: this.data.collected.length + 1,
+          seq: this.scanFrameSeq,
           timestamp: Date.now(),
         },
         header: {
@@ -635,13 +922,58 @@ Page({
         },
       });
       latencyMs = Date.now() - startAt;
+      console.log('[opencv-response]', { statusCode: res && res.statusCode, data: res && res.data });
       result = res && res.data;
       if (result && result.debug) {
         const debugText = JSON.stringify(result.debug);
+        const debugImages = result.debug && result.debug.debugImages ? result.debug.debugImages : {};
         console.log('[opencv-debug]', debugText);
-        this.setData({ lastDebugText: debugText });
+        this.setData({
+          lastDebugText: debugText,
+          debugImageEdge: debugImages.edge ? `data:image/png;base64,${debugImages.edge}` : '',
+          debugImageThreshold: debugImages.threshold ? `data:image/png;base64,${debugImages.threshold}` : '',
+        });
+      }
+
+      if (this.data.sampleCollecting) {
+        if (!this.sampleFrames) this.sampleFrames = [];
+        const sample = {
+          ts: Date.now(),
+          photoPath: photoPath,
+          roi: {
+            frameWidth: sendW,
+            frameHeight: sendH,
+            roiXRatio: Number(((roiX / width) || 0).toFixed(6)),
+            roiYRatio: Number(((roiY / height) || 0).toFixed(6)),
+            roiWRatio: Number(((roiW / width) || 0).toFixed(6)),
+            roiHRatio: Number(((roiH / height) || 0).toFixed(6)),
+            base64Length: frameBase64Len,
+          },
+          opencv: result && result.debug ? result.debug : null,
+        };
+        this.sampleFrames.push(sample);
+        const count = this.sampleFrames.length;
+        this.setData({ sampleCollectCount: count });
+        if (count >= Number(this.data.sampleCollectTarget || 20)) {
+          const dump = {
+            createdAt: Date.now(),
+            target: this.data.sampleCollectTarget,
+            frames: this.sampleFrames,
+          };
+          const filePath = `${wx.env.USER_DATA_PATH}/roi_samples_${Date.now()}.json`;
+          wx.getFileSystemManager().writeFile({
+            filePath,
+            data: JSON.stringify(dump, null, 2),
+            encoding: 'utf8',
+            success: () => {
+              this.setData({ sampleCollecting: false, sampleLastFilePath: filePath });
+              wx.showModal({ title: '采集完成', content: `已保存:\n${filePath}`, showCancel: false });
+            },
+          });
+        }
       }
     } catch (err) {
+      console.log('[opencv-error]', err);
       this.scanTimeoutCount += 1;
       if (this.scanTimeoutCount >= 3) {
         this.scanWeakNetwork = true;
@@ -661,27 +993,41 @@ Page({
     const frameMinConf = Number((this.data.tuner && this.data.tuner.frameMinConf) || this.data.frameMinConf);
     const shapeItems = Array.isArray(result.items) ? result.items : null;
 
-    if (!shapeItems || !shapeItems.length) return;
+    if (!shapeItems || !shapeItems.length) {
+      const baseRect = this.cameraRect || { left: 0, top: 0, width: this.windowWidth, height: this.windowHeight };
+      const overlayScaleX = width / baseRect.width;
+      const overlayScaleY = height / baseRect.height;
+      const overlayOffsetX = baseRect.left;
+      const overlayOffsetY = baseRect.top;
+      this.drawOverlay([], [], overlayScaleX, overlayScaleY, overlayOffsetX, overlayOffsetY);
+      if (this.data.scanHint !== '识别到 0 个图形') {
+        this.setData({ scanHint: '识别到 0 个图形', scanPattern: '' });
+      }
+      return;
+    }
 
     const normalized = shapeItems
       .map((item) => {
         const label = item.label || item.type || item.cls || item.class || item.shape;
         const y = Number(item.y ?? item.cy ?? item.centerY ?? item.center_y);
         const x = Number(item.x ?? item.cx ?? item.centerX ?? item.center_x);
+        const w = Number(item.w ?? item.width ?? item.bw);
+        const h = Number(item.h ?? item.height ?? item.bh);
         const confidence = Number(item.confidence ?? item.score ?? item.prob);
         return {
           label: label || 'unknown',
           y,
           x,
+          w: Number.isFinite(w) ? w : null,
+          h: Number.isFinite(h) ? h : null,
           confidence: Number.isFinite(confidence) ? confidence : null,
         };
       })
       .filter((item) => Number.isFinite(item.y));
 
+    this.updateScanPreview(normalized, roiX, roiY, roiW, roiH, width, height);
+
     if (normalized.length !== SEGMENTS) {
-      if (this.data.scanHint !== '请将完整一列图形置入框内') {
-        this.setData({ scanHint: '请将完整一列图形置入框内' });
-      }
       return;
     }
 
@@ -723,10 +1069,10 @@ Page({
     const overlayOffsetY = baseRect.top;
 
     const overlayBoxes = orderedShapes.map((item) => ({
-      x: Number.isFinite(item.x) ? item.x - roiX : roiW / 2,
-      y: Number.isFinite(item.y) ? item.y - roiY : roiH / 2,
-      w: roiW * 0.28,
-      h: roiH * 0.12,
+      x: Number.isFinite(item.x) ? item.x - (Number.isFinite(item.w) ? item.w / 2 : 0) : roiW / 2,
+      y: Number.isFinite(item.y) ? item.y - (Number.isFinite(item.h) ? item.h / 2 : 0) : roiH / 2,
+      w: Number.isFinite(item.w) ? item.w : roiW * 0.28,
+      h: Number.isFinite(item.h) ? item.h : roiH * 0.12,
     }));
 
     this.drawOverlay(overlayBoxes, safeLabels, overlayScaleX, overlayScaleY, overlayOffsetX, overlayOffsetY);
@@ -1365,6 +1711,18 @@ Page({
     this.setData({ showTuner: !this.data.showTuner });
   },
 
+  toggleDebugRoi() {
+    const next = !this.data.debugRoi;
+    this.setData({ debugRoi: next });
+    if (!next) {
+      this.setData({ debugImageInput: '' });
+    }
+  },
+
+  toggleDebugRoiBinary() {
+    const next = !this.data.debugRoiBinary;
+    this.setData({ debugRoiBinary: next });
+  },
 
   adjustTuner(e) {
     const key = e && e.currentTarget && e.currentTarget.dataset && e.currentTarget.dataset.key;

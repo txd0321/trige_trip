@@ -24,11 +24,18 @@
     "miniprogram": {
       "list": [
         {
-          "name": "pages/xr-interaction/index",
-          "pathName": "pages/xr-interaction/index",
+          "name": "pages/pattern-collector/index",
+          "pathName": "pages/pattern-collector/index",
           "query": "",
           "scene": null,
           "launchMode": "default"
+        },
+        {
+          "name": "pages/xr-interaction/index",
+          "pathName": "pages/xr-interaction/index",
+          "query": "",
+          "launchMode": "default",
+          "scene": null
         },
         {
           "name": "pages/ar/index",
